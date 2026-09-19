@@ -1,0 +1,37 @@
+{
+  "name": "bank_snapshot",
+  "description": "Bank contents (item id, name, quantity) as of when the bank was last open, with that timestamp. The game only materializes the bank client-side once opened, so this is unavailable until the player opens a bank.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "description": "When available is false the contents are unknown, not empty.",
+    "required": ["container", "available"],
+    "properties": {
+      "container": { "type": "string", "const": "bank" },
+      "available": { "type": "boolean" },
+      "note": { "type": "string", "description": "Why the bank is unavailable, e.g. never opened this session." },
+      "capturedAt": {
+        "type": "string",
+        "description": "When the snapshot was taken, i.e. when the bank was last open. ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied."
+      },
+      "capturedAtMs": { "type": "integer", "description": "Same instant in epoch milliseconds." },
+      "ageSeconds": { "type": "integer", "description": "How stale the snapshot is." },
+      "uniqueItems": { "type": "integer", "description": "Distinct item count." },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "qty"],
+          "properties": {
+            "id": { "type": "integer" },
+            "qty": { "type": "integer", "minimum": 1 },
+            "name": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

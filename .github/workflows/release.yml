@@ -1,0 +1,52 @@
+name: release
+
+# Tag a release to publish the sideload jar:  git tag v0.1.0 && git push --tags
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Test
+        working-directory: plugin
+        run: ./gradlew --no-daemon test
+
+      - name: Build jar
+        working-directory: plugin
+        run: ./gradlew --no-daemon jar
+
+      - name: Check the tag matches the built jar
+        working-directory: plugin
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          jar="build/libs/gielinor-companion-${version}.jar"
+          if [ ! -f "$jar" ]; then
+            echo "tag ${GITHUB_REF_NAME} expects ${jar}, which the build did not produce."
+            echo "Bump 'version' in plugin/build.gradle to ${version} (built: $(ls build/libs))"
+            exit 1
+          fi
+          sha256sum "$jar" | tee "${jar}.sha256"
+
+      - name: Publish
+        working-directory: plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "${GITHUB_REF_NAME}" \
+            "build/libs/gielinor-companion-${version}.jar" \
+            "build/libs/gielinor-companion-${version}.jar.sha256" \
+            --title "Gielinor Companion ${GITHUB_REF_NAME}" \
+            --notes "Sideload install: drop the jar in \`%USERPROFILE%\\.runelite\\sideloaded-plugins\` and start the client in developer mode (see the README). Verify with the .sha256 file."

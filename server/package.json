@@ -1,0 +1,24 @@
+{
+  "name": "osrs-companion-mcp",
+  "version": "0.1.0",
+  "description": "MCP server combining live RuneLite game state with OSRS wiki, GE price, and WOM data",
+  "type": "module",
+  "bin": {
+    "osrs-companion-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node --import tsx --test test/*.test.ts",
+    "start:http": "node dist/index.js --http"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

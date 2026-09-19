@@ -1,0 +1,338 @@
+{
+  "name": "game_state",
+  "description": "Live account snapshot: skills (real/boosted/XP), quest points, every quest's completion state, achievement diary tiers with per-tier task counts, combat achievement tier summary, slayer task/points/streak with decoded unlocks, boss killcounts, inventory, equipment, last bank snapshot, and collection log counts. Use the sections argument to fetch just what you need.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "sections": {
+        "type": "array",
+        "description": "Return only these parts of the snapshot instead of all of it. Omit for everything.",
+        "items": {
+          "type": "string",
+          "enum": [
+            "state",
+            "quests",
+            "diaries",
+            "combatAchievements",
+            "slayer",
+            "bossKc",
+            "inventory",
+            "equipment",
+            "bank",
+            "collectionLog"
+          ]
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "description": "Every section is optional: the sections argument trims the response, and a section the client cannot read right now is omitted rather than faked.",
+    "required": ["capturedAt"],
+    "properties": {
+      "capturedAt": { "$ref": "#/$defs/timestamp" },
+      "ignoredSections": {
+        "type": "string",
+        "description": "Present only when the sections argument named something unknown; lists what was ignored and what is valid."
+      },
+      "state": { "$ref": "#/$defs/playerState" },
+      "quests": { "$ref": "#/$defs/quests" },
+      "diaries": { "$ref": "#/$defs/diaries" },
+      "combatAchievements": { "$ref": "#/$defs/combatAchievementsSummary" },
+      "slayer": { "$ref": "#/$defs/slayer" },
+      "bossKc": { "$ref": "#/$defs/bossKc" },
+      "inventory": { "$ref": "#/$defs/container" },
+      "equipment": { "$ref": "#/$defs/container" },
+      "bank": { "$ref": "#/$defs/container" },
+      "collectionLog": { "$ref": "#/$defs/collectionLogSummary" }
+    },
+    "$defs": {
+      "timestamp": {
+        "type": "string",
+        "description": "ISO-8601 instant, UTC, e.g. 2026-09-18T15:17:50.887747Z. Transported as a JSON string; no native date-time type is implied."
+      },
+      "playerState": {
+        "type": "object",
+        "description": "Only capturedAt and loggedIn are guaranteed. While loggedIn is false every other field is untrustworthy: a freshly started client reports zeros, and one that logged out mid-session keeps serving that session's values.",
+        "required": ["capturedAt", "loggedIn"],
+        "properties": {
+          "capturedAt": { "$ref": "#/$defs/timestamp" },
+          "loggedIn": { "type": "boolean" },
+          "username": { "type": "string", "description": "RSN; absent when logged out." },
+          "combatLevel": { "type": "integer", "minimum": 0, "maximum": 126, "description": "3-126 in game; 0 or absent before login." },
+          "location": {
+            "type": "object",
+            "required": ["x", "y", "plane", "regionId"],
+            "properties": {
+              "x": { "type": "integer" },
+              "y": { "type": "integer" },
+              "plane": { "type": "integer", "minimum": 0, "maximum": 3 },
+              "regionId": { "type": "integer" }
+            }
+          },
+          "world": { "type": "integer" },
+          "worldTypes": {
+            "type": "array",
+            "description": "RuneLite WorldType names, e.g. MEMBERS, PVP, SEASONAL.",
+            "items": { "type": "string" }
+          },
+          "members": { "type": "boolean" },
+          "accountType": {
+            "type": "string",
+            "description": "RuneLite AccountType name.",
+            "enum": [
+              "NORMAL",
+              "IRONMAN",
+              "ULTIMATE_IRONMAN",
+              "HARDCORE_IRONMAN",
+              "GROUP_IRONMAN",
+              "HARDCORE_GROUP_IRONMAN",
+              "UNRANKED_GROUP_IRONMAN"
+            ]
+          },
+          "skills": {
+            "type": "object",
+            "description": "Keyed by RuneLite Skill name in title case: Attack, Defence, Strength, Hitpoints, ...",
+            "additionalProperties": { "$ref": "#/$defs/skill" }
+          },
+          "overall": {
+            "type": "object",
+            "required": ["totalLevel", "xp"],
+            "properties": {
+              "totalLevel": { "type": "integer" },
+              "xp": { "type": "integer", "description": "Total XP across all skills." }
+            }
+          },
+          "hitpoints": { "type": "integer", "description": "Current hitpoints, not the level." },
+          "prayerPoints": { "type": "integer" },
+          "runEnergy": { "type": "number", "minimum": 0, "maximum": 100 },
+          "weightTenthsKg": { "type": "integer", "description": "Carried weight in tenths of a kilogram." },
+          "kudos": { "type": "integer", "description": "Varrock Museum kudos." },
+          "questPoints": { "type": "integer" }
+        }
+      },
+      "skill": {
+        "type": "object",
+        "required": ["level", "boosted", "xp"],
+        "properties": {
+          "level": { "type": "integer", "minimum": 0, "description": "Real level, ignoring boosts and drains. Every skill reads 0 before the player logs in — check loggedIn before trusting these." },
+          "boosted": { "type": "integer", "description": "Current level including boosts and drains; can exceed or fall below level." },
+          "xp": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "quests": {
+        "type": "object",
+        "required": ["capturedAt", "quests", "summary"],
+        "properties": {
+          "capturedAt": { "$ref": "#/$defs/timestamp" },
+          "quests": {
+            "type": "object",
+            "description": "Keyed by the quest's in-game name, e.g. \"Animal Magnetism\".",
+            "additionalProperties": {
+              "type": "string",
+              "enum": ["FINISHED", "IN_PROGRESS", "NOT_STARTED"]
+            }
+          },
+          "summary": {
+            "type": "object",
+            "required": ["finished", "inProgress", "notStarted"],
+            "properties": {
+              "finished": { "type": "integer" },
+              "inProgress": { "type": "integer" },
+              "notStarted": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "diaries": {
+        "type": "object",
+        "required": ["capturedAt", "regions", "summary"],
+        "properties": {
+          "capturedAt": { "$ref": "#/$defs/timestamp" },
+          "regions": {
+            "type": "object",
+            "description": "Keyed by region name: Ardougne, Desert, Falador, Fremennik, Kandarin, Karamja, \"Kourend & Kebos\", \"Lumbridge & Draynor\", Morytania, Varrock, \"Western Provinces\", Wilderness.",
+            "additionalProperties": { "$ref": "#/$defs/diaryRegion" }
+          },
+          "summary": {
+            "type": "object",
+            "required": ["tiersComplete", "tiersTotal", "tasksComplete"],
+            "properties": {
+              "tiersComplete": { "type": "integer" },
+              "tiersTotal": { "type": "integer", "description": "12 regions x 4 tiers = 48." },
+              "tasksComplete": { "type": "integer", "description": "Diary tasks done across every region and tier." }
+            }
+          }
+        }
+      },
+      "diaryRegion": {
+        "type": "object",
+        "required": ["started", "easy", "medium", "hard", "elite"],
+        "properties": {
+          "started": { "type": "boolean" },
+          "easy": { "$ref": "#/$defs/diaryTier" },
+          "medium": { "$ref": "#/$defs/diaryTier" },
+          "hard": { "$ref": "#/$defs/diaryTier" },
+          "elite": { "$ref": "#/$defs/diaryTier" }
+        }
+      },
+      "diaryTier": {
+        "type": "object",
+        "required": ["raw", "complete", "state", "tasksComplete", "rewardClaimed"],
+        "properties": {
+          "raw": {
+            "type": "integer",
+            "description": "The completion varbit as stored. 1 means complete for the standard diaries; Karamja easy/medium/hard use the legacy ATJUN varbits where 1 is in progress and 2 is complete. Prefer the complete flag."
+          },
+          "complete": { "type": "boolean" },
+          "state": { "type": "string", "enum": ["COMPLETE", "INCOMPLETE"] },
+          "tasksComplete": {
+            "type": "integer",
+            "description": "Tasks finished in this tier. The per-tier total is not stored client-side, so pair this with wiki data to render \"7 of 10\"."
+          },
+          "rewardClaimed": { "type": "boolean", "description": "The tier's reward has been collected from the taskmaster." }
+        }
+      },
+      "combatAchievementsSummary": {
+        "type": "object",
+        "required": ["capturedAt", "tiers", "totalTasks", "totalCompleted"],
+        "properties": {
+          "capturedAt": { "$ref": "#/$defs/timestamp" },
+          "tiers": { "type": "array", "items": { "$ref": "#/$defs/combatAchievementTier" } },
+          "totalTasks": { "type": "integer" },
+          "totalCompleted": { "type": "integer" },
+          "note": { "type": "string", "description": "Points at the combat_achievements tool for per-task detail." }
+        }
+      },
+      "combatAchievementTier": {
+        "type": "object",
+        "required": ["tier", "tierCompleted", "tasksCompleted", "taskCount"],
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": ["easy", "medium", "hard", "elite", "master", "grandmaster"]
+          },
+          "tierCompleted": { "type": "boolean" },
+          "tasksCompleted": { "type": "integer" },
+          "taskCount": { "type": "integer" },
+          "tasks": {
+            "type": "array",
+            "description": "Per-task detail; present in the combat_achievements tool, omitted from this summary.",
+            "items": { "$ref": "#/$defs/combatAchievementTask" }
+          }
+        }
+      },
+      "combatAchievementTask": {
+        "type": "object",
+        "required": ["id", "name", "completed"],
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "completed": { "type": "boolean" }
+        }
+      },
+      "slayer": {
+        "type": "object",
+        "description": "Task fields are absent when the player has no assignment.",
+        "required": ["capturedAt", "points"],
+        "properties": {
+          "capturedAt": { "$ref": "#/$defs/timestamp" },
+          "task": { "type": "string", "description": "Assigned creature name." },
+          "taskId": { "type": "integer" },
+          "taskRemaining": { "type": "integer", "description": "Kills left on the current task." },
+          "initialAmount": { "type": "integer", "description": "Task size when assigned." },
+          "points": { "type": "integer" },
+          "tasksCompleted1": { "type": "integer", "description": "Streak counter, varp 1 of 2." },
+          "tasksCompleted2": { "type": "integer", "description": "Streak counter, varp 2 of 2." },
+          "unlockBitFields": {
+            "type": "object",
+            "description": "Raw unlock/block bitfields, decoded into unlocks below.",
+            "properties": {
+              "rewardsUnlocks": { "type": "integer" },
+              "rewardsUnlocks1": { "type": "integer" },
+              "blockedTasks": { "type": "integer" }
+            }
+          },
+          "unlocks": { "type": "array", "items": { "$ref": "#/$defs/slayerUnlock" } }
+        }
+      },
+      "slayerUnlock": {
+        "type": "object",
+        "required": ["name", "bit", "unlocked"],
+        "properties": {
+          "name": { "type": "string" },
+          "bit": { "type": "integer", "description": "Bit index within the unlock bitfields." },
+          "unlocked": { "type": "boolean" },
+          "cost": { "type": "integer", "description": "Slayer point cost." }
+        }
+      },
+      "bossKc": {
+        "type": "object",
+        "required": ["capturedAt", "bosses", "trackedBosses"],
+        "properties": {
+          "capturedAt": { "$ref": "#/$defs/timestamp" },
+          "bosses": { "type": "array", "items": { "$ref": "#/$defs/bossEntry" } },
+          "trackedBosses": { "type": "integer" }
+        }
+      },
+      "bossEntry": {
+        "type": "object",
+        "required": ["name", "varpId", "kills"],
+        "properties": {
+          "name": { "type": "string" },
+          "varpId": { "type": "integer", "description": "Varp the count is read from." },
+          "kills": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "container": {
+        "type": "object",
+        "description": "Inventory, equipment, or the bank. When available is false the contents are unknown, not empty — the bank in particular only exists client-side once opened.",
+        "required": ["container", "available"],
+        "properties": {
+          "container": { "type": "string", "enum": ["inventory", "equipment", "bank"] },
+          "available": { "type": "boolean" },
+          "note": { "type": "string", "description": "Why the contents are unavailable." },
+          "capturedAt": { "$ref": "#/$defs/timestamp" },
+          "capturedAtMs": { "type": "integer", "description": "Bank only: capture time in epoch milliseconds." },
+          "ageSeconds": { "type": "integer", "description": "Bank only: how stale the snapshot is." },
+          "uniqueItems": { "type": "integer", "description": "Bank only: distinct item count." },
+          "items": { "type": "array", "items": { "$ref": "#/$defs/item" } }
+        }
+      },
+      "item": {
+        "type": "object",
+        "required": ["id", "qty"],
+        "properties": {
+          "id": { "type": "integer", "description": "Item id; look names up against the GE mapping if name is absent." },
+          "qty": { "type": "integer", "minimum": 1 },
+          "name": { "type": "string" },
+          "slot": {
+            "type": "string",
+            "description": "Equipment only: which slot the item is worn in.",
+            "enum": [
+              "HEAD", "CAPE", "AMULET", "WEAPON", "BODY", "SHIELD", "ARMS",
+              "LEGS", "HAIR", "GLOVES", "BOOTS", "JAW", "RING", "AMMO"
+            ]
+          }
+        }
+      },
+      "collectionLogSummary": {
+        "type": "object",
+        "required": ["uniqueObtained", "uniqueTotal"],
+        "properties": {
+          "uniqueObtained": { "type": "integer" },
+          "uniqueTotal": { "type": "integer" },
+          "capture": { "$ref": "#/$defs/collectionLogCapture" }
+        }
+      },
+      "collectionLogCapture": {
+        "type": "object",
+        "description": "Per-item state only exists for pages the player has opened in game this session.",
+        "properties": {
+          "pagesCapturedThisSession": { "type": "integer" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  }
+}

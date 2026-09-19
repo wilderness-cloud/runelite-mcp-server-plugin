@@ -1,0 +1,28 @@
+{
+  "name": "client_status",
+  "description": "Whether the RuneLite client is running and logged in, which account is logged in, and how long since the last game tick. Cheap; call this first if a state read fails.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["status", "service", "version", "port", "gameState", "loggedIn", "msSinceLastTick"],
+    "properties": {
+      "status": { "type": "string", "const": "ok" },
+      "service": { "type": "string", "const": "gielinor-companion" },
+      "version": { "type": "string", "description": "Plugin version." },
+      "port": { "type": "integer", "description": "Port the plugin is bound to on 127.0.0.1." },
+      "gameState": {
+        "type": "string",
+        "description": "RuneLite GameState name, e.g. LOGGED_IN, LOGIN_SCREEN, HOPPING, LOADING."
+      },
+      "loggedIn": { "type": "boolean" },
+      "username": { "type": "string", "description": "RSN; absent when logged out." },
+      "msSinceLastTick": {
+        "type": "integer",
+        "description": "Milliseconds since the last game tick, or -1 if no tick has been seen. A large value means the client is at the login screen or frozen."
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "combat_achievements",
+  "description": "Every combat achievement task (all six tiers, ~655 tasks) with per-task completion, decoded from the game's own task tables. Large; game_state already carries the per-tier summary.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["capturedAt", "tiers", "totalTasks", "totalCompleted"],
+    "properties": {
+      "capturedAt": { "type": "string", "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied." },
+      "tiers": {
+        "type": "array",
+        "description": "One entry per tier, in difficulty order.",
+        "items": {
+          "type": "object",
+          "required": ["tier", "tierCompleted", "tasksCompleted", "taskCount", "tasks"],
+          "properties": {
+            "tier": {
+              "type": "string",
+              "enum": ["easy", "medium", "hard", "elite", "master", "grandmaster"]
+            },
+            "tierCompleted": {
+              "type": "boolean",
+              "description": "The tier's completion varbit, i.e. every task in it is done."
+            },
+            "tasksCompleted": { "type": "integer" },
+            "taskCount": { "type": "integer" },
+            "tasks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "name", "completed"],
+                "properties": {
+                  "id": { "type": "integer", "description": "Task struct id from the game's table." },
+                  "name": { "type": "string" },
+                  "completed": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "totalTasks": { "type": "integer" },
+      "totalCompleted": { "type": "integer" }
+    }
+  }
+}

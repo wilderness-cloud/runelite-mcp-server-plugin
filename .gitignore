@@ -1,0 +1,19 @@
+# Java / Gradle
+plugin/build/
+plugin/.gradle/
+plugin/out/
+*.class
+
+# Node
+server/node_modules/
+server/dist/
+server/.cache/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
