@@ -35,7 +35,7 @@ Served by the plugin at `POST http://127.0.0.1:8765/mcp`.
 
 | Tool | What it does |
 |---|---|
-| `client_status` | Is the client running and logged in, which account, ms since last tick. Cheap; call it first when a state read fails |
+| `client_status` | Is the client running and logged in, which account, ms since last tick, and which build of the plugin is running (`build` = short git SHA, `builtAt`). Cheap; call it first when a state read fails, and to check a sideloaded deploy actually took |
 | `game_state` | The account in one call: skills (real/boosted/XP), quest points, every quest's completion state, diary tiers with per-tier task counts, combat achievement tier summary, slayer task/points/streak with decoded unlocks, boss killcounts, inventory, equipment, last bank snapshot, collection log counts. Takes a `sections` argument to fetch only part of it |
 | `combat_achievements` | Every CA task (all 6 tiers, ~655) with per-task completion, decoded from the game's own task tables — no interface needed |
 | `collection_log` | Aggregate counts plus the full tab/page/item catalog (~1,926 items); per-item state for pages viewed in game this session |
@@ -63,7 +63,7 @@ lives in this repo; the Java side supplies only the handler.
 
 | File | Tool |
 |---|---|
-| `client_status.json` | liveness, login state, account name |
+| `client_status.json` | liveness, login state, account name, build stamp |
 | `game_state.json` | the snapshot, plus every shared `$def` — skills, items, diary tiers, quest states |
 | `combat_achievements.json` | per-task detail for all six tiers |
 | `collection_log.json` | tab/page/item catalog |
