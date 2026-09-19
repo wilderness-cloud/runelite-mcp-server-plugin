@@ -1,6 +1,6 @@
 {
   "name": "bank_snapshot",
-  "description": "Bank contents (item id, name, quantity) as of when the bank was last open, with that timestamp. The game only materializes the bank client-side once opened, so this is unavailable until the player opens a bank.",
+  "description": "Full bank contents as of when the bank was last open, with tab layout and slot order. Returns every item (hundreds of entries), so prefer find_item when you are looking for specific items and game_state's bank section when you just need a rough picture. Use this when you need the whole bank: valuing it, diffing it, or reproducing its tab layout. The game only sends bank contents while the bank is open, so this is unavailable until the player opens a bank once this session, and it is a snapshot from that moment, not live.",
   "inputSchema": {
     "type": "object",
     "properties": {}
@@ -8,29 +8,114 @@
   "outputSchema": {
     "type": "object",
     "description": "When available is false the contents are unknown, not empty.",
-    "required": ["container", "available"],
+    "required": [
+      "container",
+      "available"
+    ],
     "properties": {
-      "container": { "type": "string", "const": "bank" },
-      "available": { "type": "boolean" },
-      "note": { "type": "string", "description": "Why the bank is unavailable, e.g. never opened this session." },
+      "container": {
+        "type": "string",
+        "const": "bank"
+      },
+      "available": {
+        "type": "boolean"
+      },
+      "note": {
+        "type": "string",
+        "description": "Why the bank is unavailable, e.g. never opened this session."
+      },
       "capturedAt": {
         "type": "string",
         "description": "When the snapshot was taken, i.e. when the bank was last open. ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied."
       },
-      "capturedAtMs": { "type": "integer", "description": "Same instant in epoch milliseconds." },
-      "ageSeconds": { "type": "integer", "description": "How stale the snapshot is." },
-      "uniqueItems": { "type": "integer", "description": "Distinct item count." },
+      "capturedAtMs": {
+        "type": "integer",
+        "description": "Same instant in epoch milliseconds."
+      },
+      "ageSeconds": {
+        "type": "integer",
+        "description": "How stale the snapshot is."
+      },
+      "uniqueItems": {
+        "type": "integer",
+        "description": "Number of entries in items, placeholders included."
+      },
       "items": {
         "type": "array",
         "items": {
           "type": "object",
-          "required": ["id", "qty"],
+          "required": [
+            "id",
+            "qty",
+            "slot"
+          ],
           "properties": {
-            "id": { "type": "integer" },
-            "qty": { "type": "integer", "minimum": 1 },
-            "name": { "type": "string" }
+            "id": {
+              "type": "integer"
+            },
+            "qty": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Stack size. 0 means a placeholder: the slot is reserved and the item is NOT owned."
+            },
+            "name": {
+              "type": "string"
+            },
+            "slot": {
+              "type": "integer",
+              "description": "Index of this item in the bank container. Tab membership is derived from this via tabs; items are returned in bank display order."
+            },
+            "placeholder": {
+              "type": "boolean",
+              "description": "True when this entry is a reserved empty slot rather than a held item."
+            }
+          }
+        },
+        "description": "Every bank entry, in bank display order."
+      },
+      "placeholderCount": {
+        "type": "integer",
+        "description": "How many entries are placeholders (reserved empty slots, qty 0) rather than held items. Subtract from uniqueItems for a true item count."
+      },
+      "tabs": {
+        "type": "array",
+        "description": "Bank tab layout as index ranges over items[].slot, rather than a tab field on every item. A tab owns the slots from start to start+count-1. Tabs 1-9 come first in order; the main tab (tab 0) holds whatever follows them. To list a tab's contents, take the items whose slot falls in its range.",
+        "items": {
+          "type": "object",
+          "required": [
+            "tab",
+            "start",
+            "count"
+          ],
+          "properties": {
+            "tab": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9,
+              "description": "Tab number; 0 is the main tab."
+            },
+            "start": {
+              "type": "integer",
+              "description": "First slot index in this tab."
+            },
+            "count": {
+              "type": "integer",
+              "description": "How many slots this tab holds."
+            },
+            "main": {
+              "type": "boolean",
+              "description": "Present and true on the main tab."
+            }
           }
         }
+      },
+      "currentTab": {
+        "type": "integer",
+        "description": "Tab the player had open when the snapshot was taken; 0 is the main tab. Cosmetic - it says nothing about where items live."
+      },
+      "leavePlaceholders": {
+        "type": "boolean",
+        "description": "Whether the player's bank is set to leave placeholders when withdrawing. Explains why qty-0 entries appear."
       }
     }
   }

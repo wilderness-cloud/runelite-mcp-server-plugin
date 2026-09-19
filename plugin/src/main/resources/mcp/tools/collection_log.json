@@ -1,26 +1,53 @@
 {
   "name": "collection_log",
-  "description": "Collection log: unique-obtained counts plus the full tab/page/item catalog (~1,926 items). Per-item obtained state only exists for pages the player has opened in game this session. Large.",
+  "description": "Collection log: account-wide obtained/total counts, plus the tab/page/item catalog. Unfiltered the catalog is ~1,900 items and a very large response, so FILTER IT: page to get one boss's log, or search to find a specific drop. IMPORTANT - per-item obtained state only exists for pages the player has opened in game this session, because the game only sends it for the visible page; everywhere else an item simply has no obtained field, which means unknown, NOT missing. The uniqueObtained/uniqueTotal counters are always accurate and are the right source for 'how complete is my log'.",
   "inputSchema": {
     "type": "object",
-    "properties": {}
+    "properties": {
+      "page": {
+        "type": "string",
+        "description": "Only pages whose name contains this text, case-insensitive (e.g. 'Vorkath'). The usual way to keep the response small."
+      },
+      "search": {
+        "type": "string",
+        "description": "Only items whose name contains this text, case-insensitive. Pages left with no matching item are omitted."
+      },
+      "obtained": {
+        "type": "boolean",
+        "description": "true for obtained items only, false for missing ones only. Only matches items on pages viewed in game this session, since elsewhere the state is unknown."
+      }
+    }
   },
   "outputSchema": {
     "type": "object",
-    "required": ["capturedAt", "uniqueObtained", "uniqueTotal", "catalog"],
+    "required": [
+      "capturedAt",
+      "uniqueObtained",
+      "uniqueTotal",
+      "catalog"
+    ],
     "properties": {
-      "capturedAt": { "type": "string", "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied." },
+      "capturedAt": {
+        "type": "string",
+        "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied."
+      },
       "uniqueObtained": {
         "type": "integer",
         "description": "Account-wide unique items obtained, read from the game's own counter — always accurate, unlike per-item state."
       },
-      "uniqueTotal": { "type": "integer" },
+      "uniqueTotal": {
+        "type": "integer"
+      },
       "capture": {
         "type": "object",
         "description": "How much per-item detail this session has managed to observe.",
         "properties": {
-          "pagesCapturedThisSession": { "type": "integer" },
-          "note": { "type": "string" }
+          "pagesCapturedThisSession": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
         }
       },
       "catalog": {
@@ -31,9 +58,15 @@
           "description": "Page name (e.g. \"Abyssal Sire\") to its contents.",
           "additionalProperties": {
             "type": "object",
-            "required": ["itemCount", "items"],
+            "required": [
+              "itemCount",
+              "items"
+            ],
             "properties": {
-              "itemCount": { "type": "integer" },
+              "itemCount": {
+                "type": "integer",
+                "description": "Total items on this page, ignoring any filter."
+              },
               "viewedThisSession": {
                 "type": "boolean",
                 "description": "Present only when the player opened this page this session; without it, items carry no obtained state."
@@ -46,19 +79,47 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["id"],
+                  "required": [
+                    "id"
+                  ],
                   "properties": {
-                    "id": { "type": "integer" },
-                    "name": { "type": "string" },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
                     "obtained": {
                       "type": "boolean",
                       "description": "Present only for pages viewed this session. Absent means unknown, not missing."
                     },
-                    "qty": { "type": "integer", "description": "Quantity obtained; present only when obtained is true and non-zero." }
+                    "qty": {
+                      "type": "integer",
+                      "description": "Quantity obtained; present only when obtained is true and non-zero."
+                    }
                   }
                 }
+              },
+              "itemsReturned": {
+                "type": "integer",
+                "description": "How many items the items array actually holds. Present only when a filter dropped some."
               }
             }
+          }
+        }
+      },
+      "filter": {
+        "type": "object",
+        "description": "Echo of the filter applied. Absent when the response is unfiltered.",
+        "properties": {
+          "page": {
+            "type": "string"
+          },
+          "search": {
+            "type": "string"
+          },
+          "obtained": {
+            "type": "boolean"
           }
         }
       }

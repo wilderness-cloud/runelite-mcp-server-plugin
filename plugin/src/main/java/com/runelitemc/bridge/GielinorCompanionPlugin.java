@@ -7,7 +7,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +21,7 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;
 import net.runelite.api.ScriptID;
+import net.runelite.api.Varbits;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
@@ -164,10 +167,55 @@ public class GielinorCompanionPlugin extends Plugin
 			.register(McpToolCatalog.load("game_state",
 				args -> filterSections(onClientThread(snapshots::snapshot), args)))
 			.register(McpToolCatalog.load("combat_achievements",
-				args -> onClientThread(combatAchievements::combatAchievements)))
+				args -> onClientThread(() -> combatAchievements.combatAchievements(
+					str(args, "tier"), bool(args, "completed"), str(args, "search")))))
 			.register(McpToolCatalog.load("collection_log",
-				args -> onClientThread(collectionLog::collectionLog)))
-			.register(McpToolCatalog.load("bank_snapshot", args -> onClientThread(itemState::bank)));
+				args -> onClientThread(() -> collectionLog.collectionLog(
+					str(args, "page"), str(args, "search"), bool(args, "obtained")))))
+			.register(McpToolCatalog.load("bank_snapshot", args -> onClientThread(itemState::bank)))
+			.register(McpToolCatalog.load("find_item",
+				args -> onClientThread(() -> itemState.findItem(str(args, "query"), containers(args)))));
+	}
+
+	private static String str(JsonObject args, String key)
+	{
+		JsonElement e = args.get(key);
+		if (e == null || e.isJsonNull() || !e.isJsonPrimitive())
+		{
+			return null;
+		}
+		String v = e.getAsString().trim();
+		return v.isEmpty() ? null : v;
+	}
+
+	private static Boolean bool(JsonObject args, String key)
+	{
+		JsonElement e = args.get(key);
+		return e == null || e.isJsonNull() || !e.isJsonPrimitive()
+			? null
+			: Boolean.valueOf(e.getAsBoolean());
+	}
+
+	/** Containers find_item should search; all three unless narrowed. */
+	private static Set<String> containers(JsonObject args)
+	{
+		Set<String> out = new LinkedHashSet<>();
+		JsonElement e = args.get("containers");
+		if (e != null && e.isJsonArray() && e.getAsJsonArray().size() > 0)
+		{
+			for (JsonElement entry : e.getAsJsonArray())
+			{
+				if (entry.isJsonPrimitive())
+				{
+					out.add(entry.getAsString());
+				}
+			}
+			return out;
+		}
+		out.add("bank");
+		out.add("inventory");
+		out.add("equipment");
+		return out;
 	}
 
 	/** Trims the snapshot to the requested sections; capturedAt always survives. */
@@ -318,12 +366,33 @@ public class GielinorCompanionPlugin extends Plugin
 		}
 	}
 
+	private static final int[] BANK_TAB_COUNT_VARBITS = {
+		Varbits.BANK_TAB_ONE_COUNT, Varbits.BANK_TAB_TWO_COUNT, Varbits.BANK_TAB_THREE_COUNT,
+		Varbits.BANK_TAB_FOUR_COUNT, Varbits.BANK_TAB_FIVE_COUNT, Varbits.BANK_TAB_SIX_COUNT,
+		Varbits.BANK_TAB_SEVEN_COUNT, Varbits.BANK_TAB_EIGHT_COUNT, Varbits.BANK_TAB_NINE_COUNT,
+	};
+
+	private int[] bankTabCounts()
+	{
+		int[] counts = new int[BANK_TAB_COUNT_VARBITS.length];
+		for (int i = 0; i < counts.length; i++)
+		{
+			counts[i] = client.getVarbitValue(BANK_TAB_COUNT_VARBITS[i]);
+		}
+		return counts;
+	}
+
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
 		if (event.getContainerId() == InventoryID.BANK)
 		{
-			runtimeState.updateBank(event.getItemContainer());
+			// Read alongside the items, on the client thread: tab ranges are
+			// positional, so counts from a later moment can describe a layout
+			// the captured array no longer has.
+			runtimeState.updateBank(event.getItemContainer(), bankTabCounts(),
+				client.getVarbitValue(Varbits.CURRENT_BANK_TAB),
+				client.getVarbitValue(Varbits.BANK_LEAVEPLACEHOLDERS) == 1);
 		}
 	}
 

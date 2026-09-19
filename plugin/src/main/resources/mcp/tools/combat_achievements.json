@@ -1,49 +1,131 @@
 {
   "name": "combat_achievements",
-  "description": "Every combat achievement task (all six tiers, ~655 tasks) with per-task completion, decoded from the game's own task tables. Large; game_state already carries the per-tier summary.",
+  "description": "Combat achievement tasks with per-task completion, decoded from the game's own task tables (no interface needed). Unfiltered this is all six tiers and ~655 tasks - a large response - so FILTER IT: tier plus completed:false answers 'what do I have left at this tier', which is the usual question. Tier summary counts are always returned in full, filtered or not, so a narrow response is still interpretable. For just the per-tier totals, game_state already carries them and is cheaper than calling this.",
   "inputSchema": {
     "type": "object",
-    "properties": {}
+    "properties": {
+      "tier": {
+        "type": "string",
+        "enum": [
+          "easy",
+          "medium",
+          "hard",
+          "elite",
+          "master",
+          "grandmaster"
+        ],
+        "description": "Only this tier. Omit for all six."
+      },
+      "completed": {
+        "type": "boolean",
+        "description": "true for finished tasks only, false for remaining ones only. Omit for both. 'What's left' is completed:false."
+      },
+      "search": {
+        "type": "string",
+        "description": "Only tasks whose name contains this text, case-insensitive (e.g. 'Zulrah')."
+      }
+    }
   },
   "outputSchema": {
     "type": "object",
-    "required": ["capturedAt", "tiers", "totalTasks", "totalCompleted"],
+    "required": [
+      "capturedAt",
+      "tiers",
+      "totalTasks",
+      "totalCompleted"
+    ],
     "properties": {
-      "capturedAt": { "type": "string", "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied." },
+      "capturedAt": {
+        "type": "string",
+        "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied."
+      },
       "tiers": {
         "type": "array",
         "description": "One entry per tier, in difficulty order.",
         "items": {
           "type": "object",
-          "required": ["tier", "tierCompleted", "tasksCompleted", "taskCount", "tasks"],
+          "required": [
+            "tier",
+            "tierCompleted",
+            "tasksCompleted",
+            "taskCount",
+            "tasks"
+          ],
           "properties": {
             "tier": {
               "type": "string",
-              "enum": ["easy", "medium", "hard", "elite", "master", "grandmaster"]
+              "enum": [
+                "easy",
+                "medium",
+                "hard",
+                "elite",
+                "master",
+                "grandmaster"
+              ]
             },
             "tierCompleted": {
               "type": "boolean",
               "description": "The tier's completion varbit, i.e. every task in it is done."
             },
-            "tasksCompleted": { "type": "integer" },
-            "taskCount": { "type": "integer" },
+            "tasksCompleted": {
+              "type": "integer",
+              "description": "Completed tasks in this tier, ignoring any filter."
+            },
+            "taskCount": {
+              "type": "integer",
+              "description": "Total tasks in this tier, ignoring any filter."
+            },
             "tasks": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["id", "name", "completed"],
+                "required": [
+                  "id",
+                  "name",
+                  "completed"
+                ],
                 "properties": {
-                  "id": { "type": "integer", "description": "Task struct id from the game's table." },
-                  "name": { "type": "string" },
-                  "completed": { "type": "boolean" }
+                  "id": {
+                    "type": "integer",
+                    "description": "Task struct id from the game's table."
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "completed": {
+                    "type": "boolean"
+                  }
                 }
               }
+            },
+            "tasksReturned": {
+              "type": "integer",
+              "description": "How many tasks the tasks array actually holds. Present only when a filter dropped some; absent means tasks is complete for the tier."
             }
           }
         }
       },
-      "totalTasks": { "type": "integer" },
-      "totalCompleted": { "type": "integer" }
+      "totalTasks": {
+        "type": "integer"
+      },
+      "totalCompleted": {
+        "type": "integer"
+      },
+      "filter": {
+        "type": "object",
+        "description": "Echo of the filter applied. Absent when the response is unfiltered.",
+        "properties": {
+          "tier": {
+            "type": "string"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "search": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

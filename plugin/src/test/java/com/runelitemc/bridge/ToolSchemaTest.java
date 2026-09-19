@@ -22,7 +22,7 @@ import org.junit.Test;
 public class ToolSchemaTest
 {
 	private static final List<String> TOOLS = Arrays.asList(
-		"client_status", "game_state", "combat_achievements", "collection_log", "bank_snapshot");
+		"client_status", "game_state", "combat_achievements", "collection_log", "bank_snapshot", "find_item");
 
 	private static final McpTool.Handler NOOP = args -> new JsonObject();
 

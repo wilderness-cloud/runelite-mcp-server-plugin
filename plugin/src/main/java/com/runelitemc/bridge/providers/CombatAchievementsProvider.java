@@ -48,6 +48,20 @@ public class CombatAchievementsProvider
 
 	public JsonObject combatAchievements()
 	{
+		return combatAchievements(null, null, null);
+	}
+
+	/**
+	 * Filtered task list. Tier summaries are always returned in full — they are
+	 * six small objects and they are what makes a filtered response
+	 * interpretable ("12 of 60 Hard done" alongside the 48 you asked for).
+	 *
+	 * @param tier      tier name, or null for every tier
+	 * @param completed TRUE for done, FALSE for remaining, null for both
+	 * @param search    case-insensitive substring of the task name, or null
+	 */
+	public JsonObject combatAchievements(String tier, Boolean completedFilter, String search)
+	{
 		JsonObject o = new JsonObject();
 		o.addProperty("capturedAt", Instant.now().toString());
 
@@ -57,8 +71,14 @@ public class CombatAchievementsProvider
 
 		for (int i = 0; i < TIER_ENUM_IDS.length; i++)
 		{
+			if (tier != null && !TIER_NAMES[i].equalsIgnoreCase(tier))
+			{
+				continue;
+			}
+
 			JsonArray tasks = new JsonArray();
 			int completedCount = 0;
+			int tierTaskCount = 0;
 
 			EnumComposition tierEnum = client.getEnum(TIER_ENUM_IDS[i]);
 			if (tierEnum != null && tierEnum.getIntVals() != null)
@@ -77,9 +97,14 @@ public class CombatAchievementsProvider
 					}
 					int id = struct.getIntValue(TASK_ID_PARAM);
 					boolean completed = isCompleted(id);
+					tierTaskCount++;
 					if (completed)
 					{
 						completedCount++;
+					}
+					if (!taskMatches(name, completed, completedFilter, search))
+					{
+						continue;
 					}
 					JsonObject task = new JsonObject();
 					task.addProperty("id", id);
@@ -89,22 +114,55 @@ public class CombatAchievementsProvider
 				}
 			}
 
-			JsonObject tier = new JsonObject();
-			tier.addProperty("tier", TIER_NAMES[i]);
-			tier.addProperty("tierCompleted", client.getVarbitValue(TIER_COMPLETE_VARBITS[i]) >= 2);
-			tier.addProperty("tasksCompleted", completedCount);
-			tier.addProperty("taskCount", tasks.size());
-			tier.add("tasks", tasks);
-			tiers.add(tier);
+			JsonObject tierJson = new JsonObject();
+			tierJson.addProperty("tier", TIER_NAMES[i]);
+			tierJson.addProperty("tierCompleted", client.getVarbitValue(TIER_COMPLETE_VARBITS[i]) >= 2);
+			tierJson.addProperty("tasksCompleted", completedCount);
+			tierJson.addProperty("taskCount", tierTaskCount);
+			if (tasks.size() != tierTaskCount)
+			{
+				// Say so explicitly: a filtered list beside an unfiltered count
+				// is otherwise easy to misread as missing data.
+				tierJson.addProperty("tasksReturned", tasks.size());
+			}
+			tierJson.add("tasks", tasks);
+			tiers.add(tierJson);
 
-			totalTasks += tasks.size();
+			totalTasks += tierTaskCount;
 			totalCompleted += completedCount;
 		}
 
 		o.add("tiers", tiers);
 		o.addProperty("totalTasks", totalTasks);
 		o.addProperty("totalCompleted", totalCompleted);
+		if (tier != null || completedFilter != null || search != null)
+		{
+			JsonObject applied = new JsonObject();
+			if (tier != null)
+			{
+				applied.addProperty("tier", tier);
+			}
+			if (completedFilter != null)
+			{
+				applied.addProperty("completed", completedFilter.booleanValue());
+			}
+			if (search != null)
+			{
+				applied.addProperty("search", search);
+			}
+			o.add("filter", applied);
+		}
 		return o;
+	}
+
+	private static boolean taskMatches(String name, boolean completed, Boolean completedFilter, String search)
+	{
+		if (completedFilter != null && completedFilter.booleanValue() != completed)
+		{
+			return false;
+		}
+		return search == null
+			|| name.toLowerCase(java.util.Locale.ROOT).contains(search.toLowerCase(java.util.Locale.ROOT));
 	}
 
 	public JsonObject summary()

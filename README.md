@@ -39,7 +39,8 @@ Served by the plugin at `POST http://127.0.0.1:8765/mcp`.
 | `game_state` | The account in one call: skills (real/boosted/XP), quest points, every quest's completion state, diary tiers with per-tier task counts, combat achievement tier summary, slayer task/points/streak with decoded unlocks, boss killcounts, inventory, equipment, last bank snapshot, collection log counts. Takes a `sections` argument to fetch only part of it |
 | `combat_achievements` | Every CA task (all 6 tiers, ~655) with per-task completion, decoded from the game's own task tables — no interface needed |
 | `collection_log` | Aggregate counts plus the full tab/page/item catalog (~1,926 items); per-item state for pages viewed in game this session |
-| `bank_snapshot` | Bank contents (id/name/qty) with the timestamp of when the bank was last open |
+| `bank_snapshot` | Full bank contents (id/name/qty/slot) with tab layout and the timestamp of when the bank was last open |
+| `find_item` | "Do I have this, and where?" — searches bank, inventory and equipment by name or id, returning only matches with tab/slot |
 
 Equipment items also carry `slot` (`HEAD`, `CAPE`, `WEAPON`, …) so a client can
 rebuild the worn loadout rather than just the set of owned items.
