@@ -47,7 +47,7 @@
           "required": [
             "id",
             "qty",
-            "slot"
+            "bankSlot"
           ],
           "properties": {
             "id": {
@@ -61,13 +61,13 @@
             "name": {
               "type": "string"
             },
-            "slot": {
-              "type": "integer",
-              "description": "Index of this item in the bank container. Tab membership is derived from this via tabs; items are returned in bank display order."
-            },
             "placeholder": {
               "type": "boolean",
               "description": "True when this entry is a reserved empty slot rather than a held item."
+            },
+            "bankSlot": {
+              "type": "integer",
+              "description": "Index of this item in the bank container. Tab membership derives from it; items are returned in bank display order. Named bankSlot, not slot: slot is the worn-equipment enum elsewhere in this API."
             }
           }
         },
@@ -79,7 +79,7 @@
       },
       "tabs": {
         "type": "array",
-        "description": "Bank tab layout as index ranges over items[].slot, rather than a tab field on every item. A tab owns the slots from start to start+count-1. Tabs 1-9 come first in order; the main tab (tab 0) holds whatever follows them. To list a tab's contents, take the items whose slot falls in its range.",
+        "description": "Bank only: tab layout as index ranges over items[].bankSlot, rather than a tab field on every item. A tab owns bankSlot start through start+count-1. Tabs 1-9 come first in order; the main tab (tab 0) holds whatever follows them. To list a tab's contents, take the items whose bankSlot falls in its range.",
         "items": {
           "type": "object",
           "required": [
@@ -96,7 +96,7 @@
             },
             "start": {
               "type": "integer",
-              "description": "First slot index in this tab."
+              "description": "First bankSlot in this tab."
             },
             "count": {
               "type": "integer",

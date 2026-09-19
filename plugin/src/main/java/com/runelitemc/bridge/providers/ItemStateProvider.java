@@ -105,7 +105,7 @@ public class ItemStateProvider
 	}
 
 	/**
-	 * Bank tabs as index ranges rather than a field on every item: the bank is
+	 * Bank tabs as index ranges over bankSlot rather than a field on every item: the bank is
 	 * one flat array in display order, tabs 1-9 occupy consecutive runs from
 	 * index 0, and whatever follows them is the main tab. Ten small entries
 	 * describe the whole layout, where a per-item tab would add ~45% to a
@@ -169,7 +169,10 @@ public class ItemStateProvider
 		JsonObject it = new JsonObject();
 		it.addProperty("id", item.getId());
 		it.addProperty("qty", item.getQuantity());
-		it.addProperty("slot", slot);
+		// Deliberately not "slot": that name is the worn-equipment enum in the
+		// shared item schema, and an integer in it fails validation for every
+		// consumer of game_state, whose bank section is this same object.
+		it.addProperty("bankSlot", slot);
 		String name = itemName(item.getId());
 		if (name != null && !name.isEmpty())
 		{
@@ -296,7 +299,7 @@ public class ItemStateProvider
 			}
 			else
 			{
-				m.addProperty("slot", i);
+				m.addProperty("inventorySlot", i);
 			}
 			out.add(m);
 		}

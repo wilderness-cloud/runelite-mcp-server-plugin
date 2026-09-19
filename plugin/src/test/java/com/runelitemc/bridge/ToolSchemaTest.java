@@ -8,6 +8,8 @@ import com.runelitemc.bridge.mcp.McpToolCatalog;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -226,5 +228,73 @@ public class ToolSchemaTest
 		// an unstamped build degrades to "dev" rather than to null.
 		assertTrue("build is empty", !BuildInfo.build().isEmpty());
 		assertTrue("builtAt is empty", !BuildInfo.builtAt().isEmpty());
+	}
+
+	/**
+	 * One property name must not mean two types across the API. The bank used to
+	 * put its integer index in "slot", which the shared item schema declares as
+	 * the worn-equipment enum — so every game_state response carrying a bank
+	 * item failed validation client-side, and only once the player had opened a
+	 * bank that session, which made it look intermittent.
+	 */
+	@Test
+	public void noPropertyNameIsDeclaredWithTwoTypes()
+	{
+		Map<String, Map<String, String>> byName = new TreeMap<>();
+		for (String name : TOOLS)
+		{
+			JsonObject described = McpToolCatalog.load(name, NOOP).describe();
+			for (String key : new String[]{"inputSchema", "outputSchema"})
+			{
+				if (described.has(key))
+				{
+					collectTypes(described.get(key), name + "." + key, byName);
+				}
+			}
+		}
+
+		List<String> conflicts = new ArrayList<>();
+		for (Map.Entry<String, Map<String, String>> e : byName.entrySet())
+		{
+			if (e.getValue().size() > 1)
+			{
+				conflicts.add(e.getKey() + " declared as " + e.getValue());
+			}
+		}
+		assertTrue("property names with conflicting types: " + conflicts, conflicts.isEmpty());
+	}
+
+	/** Maps each declared property name to the types it is given, and where. */
+	private static void collectTypes(JsonElement element, String path, Map<String, Map<String, String>> out)
+	{
+		if (element.isJsonObject())
+		{
+			JsonObject o = element.getAsJsonObject();
+			if (o.has("properties") && o.get("properties").isJsonObject())
+			{
+				JsonObject props = o.getAsJsonObject("properties");
+				for (String name : props.keySet())
+				{
+					JsonElement value = props.get(name);
+					if (value.isJsonObject() && value.getAsJsonObject().has("type"))
+					{
+						String type = value.getAsJsonObject().get("type").getAsString();
+						out.computeIfAbsent(name, k -> new TreeMap<>()).put(type, path + "." + name);
+					}
+				}
+			}
+			for (String key : o.keySet())
+			{
+				collectTypes(o.get(key), path + "." + key, out);
+			}
+		}
+		else if (element.isJsonArray())
+		{
+			JsonArray array = element.getAsJsonArray();
+			for (int i = 0; i < array.size(); i++)
+			{
+				collectTypes(array.get(i), path + "[" + i + "]", out);
+			}
+		}
 	}
 }

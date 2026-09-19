@@ -1,9 +1,11 @@
 {
   "name": "find_item",
-  "description": "Answers 'do I have this item, and where is it?' in one call. Searches the bank, inventory and worn equipment for an item name (case-insensitive substring) or an exact numeric item id, returning every match with its location, quantity, bank tab and slot. USE THIS instead of pulling bank_snapshot or game_state to look for specific items: a bank runs to hundreds of entries, and this returns only the matches. Good for 'do I own a dragon defender', 'where is my whip', 'how many prayer potions do I have'. Bank matches come from the last bank snapshot, so they need the bank to have been opened once this session; inventory and equipment are live. It cannot see items on the Grand Exchange, in a looting bag, or on a deathpile.",
+  "description": "Answers 'do I have this item, and where is it?' in one call. Searches the bank, inventory and worn equipment for an item name (case-insensitive substring) or an exact numeric item id, returning every match with its location, quantity, bank tab and slot index. USE THIS instead of pulling bank_snapshot or game_state to look for specific items: a bank runs to hundreds of entries, and this returns only the matches. Good for 'do I own a dragon defender', 'where is my whip', 'how many prayer potions do I have'. Bank matches come from the last bank snapshot, so they need the bank to have been opened once this session; inventory and equipment are live. It cannot see items on the Grand Exchange, in a looting bag, or on a deathpile.",
   "inputSchema": {
     "type": "object",
-    "required": ["query"],
+    "required": [
+      "query"
+    ],
     "properties": {
       "query": {
         "type": "string",
@@ -12,39 +14,102 @@
       "containers": {
         "type": "array",
         "description": "Which containers to search. Omit to search all three.",
-        "items": { "type": "string", "enum": ["bank", "inventory", "equipment"] }
+        "items": {
+          "type": "string",
+          "enum": [
+            "bank",
+            "inventory",
+            "equipment"
+          ]
+        }
       }
     }
   },
   "outputSchema": {
     "type": "object",
     "description": "An empty matches array means the item was not found in the containers searched, which is not the same as the player not owning it: the bank may never have been opened this session (see bankAvailable).",
-    "required": ["query", "capturedAt", "containersSearched", "matches", "totalMatches"],
+    "required": [
+      "query",
+      "capturedAt",
+      "containersSearched",
+      "matches",
+      "totalMatches"
+    ],
     "properties": {
-      "query": { "type": "string", "description": "The query as received." },
-      "capturedAt": { "type": "string", "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied." },
-      "containersSearched": { "type": "array", "items": { "type": "string" } },
+      "query": {
+        "type": "string",
+        "description": "The query as received."
+      },
+      "capturedAt": {
+        "type": "string",
+        "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied."
+      },
+      "containersSearched": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
       "bankAvailable": {
         "type": "boolean",
         "description": "False means no bank snapshot exists yet, so bank matches could not be searched at all. Present only when the bank was searched."
       },
-      "totalMatches": { "type": "integer" },
-      "note": { "type": "string", "description": "Why a search returned nothing, when the reason is the query rather than the account." },
+      "totalMatches": {
+        "type": "integer"
+      },
+      "note": {
+        "type": "string",
+        "description": "Why a search returned nothing, when the reason is the query rather than the account."
+      },
       "matches": {
         "type": "array",
         "description": "One entry per matching stack. The same item can appear more than once: worn, in the inventory, and in several bank slots.",
         "items": {
           "type": "object",
-          "required": ["container", "id", "qty"],
+          "required": [
+            "container",
+            "id",
+            "qty"
+          ],
           "properties": {
-            "container": { "type": "string", "enum": ["bank", "inventory", "equipment"] },
-            "id": { "type": "integer" },
-            "qty": { "type": "integer", "description": "Stack size. 0 means a bank placeholder: the slot is reserved and the item is NOT owned." },
-            "name": { "type": "string" },
-            "slot": { "type": "integer", "description": "Index within the bank or inventory container." },
-            "equipmentSlot": { "type": "string", "description": "Worn slot name (HEAD, CAPE, WEAPON, ...); equipment matches only." },
-            "tab": { "type": "integer", "description": "Bank tab holding this item; 0 is the main tab. Bank matches only." },
-            "placeholder": { "type": "boolean", "description": "True when this is a reserved empty bank slot, not a held item." }
+            "container": {
+              "type": "string",
+              "enum": [
+                "bank",
+                "inventory",
+                "equipment"
+              ]
+            },
+            "id": {
+              "type": "integer"
+            },
+            "qty": {
+              "type": "integer",
+              "description": "Stack size. 0 means a bank placeholder: the slot is reserved and the item is NOT owned."
+            },
+            "name": {
+              "type": "string"
+            },
+            "equipmentSlot": {
+              "type": "string",
+              "description": "Equipment matches only: worn slot name (HEAD, CAPE, WEAPON, ...)."
+            },
+            "tab": {
+              "type": "integer",
+              "description": "Bank tab holding this item; 0 is the main tab. Bank matches only."
+            },
+            "placeholder": {
+              "type": "boolean",
+              "description": "True when this is a reserved empty bank slot, not a held item."
+            },
+            "bankSlot": {
+              "type": "integer",
+              "description": "Bank matches only: index in the bank container."
+            },
+            "inventorySlot": {
+              "type": "integer",
+              "description": "Inventory matches only: index in the inventory container."
+            }
           }
         }
       }
