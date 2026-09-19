@@ -194,4 +194,37 @@ public class ToolSchemaTest
 			}
 		}
 	}
+
+	/**
+	 * A sideloaded jar is whatever sits in the sideload directory, and "version"
+	 * is a constant that does not move between builds — so client_status has to
+	 * carry a build stamp, or the only way to tell a current jar from a stale one
+	 * is to diff the schemas it serves.
+	 */
+	@Test
+	public void clientStatusIdentifiesTheRunningBuild()
+	{
+		JsonObject out = McpToolCatalog.load("client_status", NOOP).describe()
+			.getAsJsonObject("outputSchema");
+		JsonObject properties = out.getAsJsonObject("properties");
+
+		List<String> required = new ArrayList<>();
+		for (JsonElement e : out.getAsJsonArray("required"))
+		{
+			required.add(e.getAsString());
+		}
+
+		for (String field : new String[]{"build", "builtAt"})
+		{
+			assertTrue("client_status must declare " + field, properties.has(field));
+			assertTrue("client_status must require " + field, required.contains(field));
+			assertEquals(field + " must be a plain string", "string",
+				properties.getAsJsonObject(field).get("type").getAsString());
+		}
+
+		// Whatever the build wrote, the values must be present and non-empty —
+		// an unstamped build degrades to "dev" rather than to null.
+		assertTrue("build is empty", !BuildInfo.build().isEmpty());
+		assertTrue("builtAt is empty", !BuildInfo.builtAt().isEmpty());
+	}
 }

@@ -32,6 +32,55 @@ dependencies {
 group = 'com.runelitemc'
 version = '0.1.0'
 
+/**
+ * Stamps the jar with the commit it was built from. A sideloaded plugin is
+ * whatever jar is in the sideload directory and the version string does not
+ * move between builds, so without this the only way to tell a current jar from
+ * a stale one is to diff the schemas it serves. client_status reports these.
+ */
+def gitOutput = { String... argv ->
+	try {
+		def out = new ByteArrayOutputStream()
+		def result = exec {
+			commandLine argv
+			standardOutput = out
+			errorOutput = new ByteArrayOutputStream()
+			ignoreExitValue = true
+			workingDir = rootDir
+		}
+		return result.exitValue == 0 ? out.toString("UTF-8").trim() : null
+	}
+	catch (Exception ignored) {
+		return null // no git, or not a checkout: the stamp degrades to "dev"
+	}
+}
+
+def buildInfoDir = layout.buildDirectory.dir("generated/build-info")
+
+tasks.register('buildInfo') {
+	def outDir = buildInfoDir
+	outputs.dir(outDir)
+	// Never up-to-date: the SHA and the dirty flag can change without any
+	// input Gradle tracks changing.
+	outputs.upToDateWhen { false }
+
+	doLast {
+		def sha = gitOutput('git', 'rev-parse', '--short', 'HEAD')
+		def status = gitOutput('git', 'status', '--porcelain')
+		def build = sha == null ? 'dev' : (status ? sha + '-dirty' : sha)
+		def builtAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString()
+
+		def dir = outDir.get().asFile
+		dir.mkdirs()
+		def body = ["build=${build}", "builtAt=${builtAt}", ""].join(System.lineSeparator())
+		new File(dir, 'build-info.properties').text = body
+		logger.lifecycle("build stamp: ${build} @ ${builtAt}")
+	}
+}
+
+sourceSets.main.resources.srcDir(buildInfoDir)
+tasks.named('processResources') { dependsOn 'buildInfo' }
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)

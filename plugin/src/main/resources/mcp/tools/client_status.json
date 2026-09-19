@@ -7,11 +7,13 @@
   },
   "outputSchema": {
     "type": "object",
-    "required": ["status", "service", "version", "port", "gameState", "loggedIn", "msSinceLastTick"],
+    "required": ["status", "service", "version", "build", "builtAt", "port", "gameState", "loggedIn", "msSinceLastTick"],
     "properties": {
       "status": { "type": "string", "const": "ok" },
       "service": { "type": "string", "const": "gielinor-companion" },
-      "version": { "type": "string", "description": "Plugin version." },
+      "version": { "type": "string", "description": "Plugin version. Declared in the build; does not change between builds of the same version, so use build to identify the running jar." },
+      "build": { "type": "string", "description": "Build identifier: short git SHA, with a -dirty suffix when built from an unclean tree, or 'dev' for a build with no git metadata." },
+      "builtAt": { "type": "string", "description": "Build time. ISO-8601 instant, UTC, as a JSON string. 'dev' when unstamped." },
       "port": { "type": "integer", "description": "Port the plugin is bound to on 127.0.0.1." },
       "gameState": {
         "type": "string",

@@ -250,6 +250,10 @@ public class GielinorCompanionPlugin extends Plugin
 		o.addProperty("status", "ok");
 		o.addProperty("service", "gielinor-companion");
 		o.addProperty("version", "0.1.0");
+		// Which jar is actually running. The version string does not move
+		// between builds, so it cannot answer that on its own.
+		o.addProperty("build", BuildInfo.build());
+		o.addProperty("builtAt", BuildInfo.builtAt());
 		o.addProperty("port", config.port());
 		o.addProperty("gameState", runtimeState.getGameState());
 		o.addProperty("loggedIn", GameState.LOGGED_IN.name().equals(runtimeState.getGameState()));
