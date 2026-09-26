@@ -16,7 +16,7 @@ repositories {
 // Pinned, not 'latest.release': a shipped build must be reproducible, and the
 // API we compile against sets the oldest client this plugin can run on.
 def runeLiteVersion = '1.12.39'
-def pluginMainClass = 'com.runelitemc.bridge.GielinorCompanionPluginTest'
+def pluginMainClass = 'com.runelitemc.bridge.McpServerPluginTest'
 
 dependencies {
 	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
@@ -59,6 +59,7 @@ def buildInfoDir = layout.buildDirectory.dir("generated/build-info")
 
 tasks.register('buildInfo') {
 	def outDir = buildInfoDir
+	def declaredVersion = project.version.toString()
 	outputs.dir(outDir)
 	// Never up-to-date: the SHA and the dirty flag can change without any
 	// input Gradle tracks changing.
@@ -72,18 +73,34 @@ tasks.register('buildInfo') {
 
 		def dir = outDir.get().asFile
 		dir.mkdirs()
-		def body = ["build=${build}", "builtAt=${builtAt}", ""].join(System.lineSeparator())
+		// 'version' rides along so the release number lives in exactly one place
+		// (this file) rather than being retyped into every class that reports it.
+		def body = ["version=${declaredVersion}", "build=${build}", "builtAt=${builtAt}", ""]
+			.join(System.lineSeparator())
 		new File(dir, 'build-info.properties').text = body
-		logger.lifecycle("build stamp: ${build} @ ${builtAt}")
+		logger.lifecycle("build stamp: ${declaredVersion} ${build} @ ${builtAt}")
 	}
 }
 
 sourceSets.main.resources.srcDir(buildInfoDir)
-tasks.named('processResources') { dependsOn 'buildInfo' }
+tasks.named('processResources') {
+	dependsOn 'buildInfo'
+	// Only the plugin manifest is templated. Filtering every resource would run
+	// the JSON tool schemas through Groovy's ${} expansion and mangle them.
+	filesMatching('runelite-plugin.properties') {
+		expand(version: project.version)
+	}
+}
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
+}
+
+tasks.named('test') {
+	// BuildInfoTest pins the release version to what the plugin reports as its
+	// MCP serverInfo.version; it needs the declared version to compare against.
+	systemProperty 'declaredVersion', project.version.toString()
 }
 
 tasks.register('run', JavaExec) {
@@ -94,28 +111,9 @@ tasks.register('run', JavaExec) {
 	args "--developer-mode", "--debug"
 }
 
-tasks.register('shadowJar', Jar) {
-	dependsOn configurations.testRuntimeClasspath
-	manifest {
-		attributes('Main-Class': pluginMainClass, 'Multi-Release': true)
-	}
-
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-	from sourceSets.main.output
-	from sourceSets.test.output
-	from {
-		configurations.testRuntimeClasspath.collect { file ->
-			file.isDirectory() ? file : zipTree(file)
-		}
-	}
-
-	exclude 'META-INF/INDEX.LIST'
-	exclude 'META-INF/*.SF'
-	exclude 'META-INF/*.DSA'
-	exclude 'META-INF/*.RSA'
-	exclude '**/module-info.class'
-
-	group = BasePlugin.BUILD_GROUP
-	archiveClassifier.set('shadow')
-	archiveFileName.set("${rootProject.name}-${project.version}-all.jar")
-}
+// No fat-jar task on purpose. The shipped artifact is the plain `jar`: this
+// plugin compiles against the client but bundles nothing, which is what keeps it
+// clear of the child-first-classloader ClassCastException trap and means the
+// release contains no third-party code to relicense or re-attribute. A fat jar
+// built from the test runtime classpath would package RuneLite's own client jar
+// inside a release asset, which is redistribution nobody here intends.

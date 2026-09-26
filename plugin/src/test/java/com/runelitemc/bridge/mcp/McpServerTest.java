@@ -11,7 +11,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 /**
- * Covers the JSON-RPC surface the Gielinor app drives: handshake, discovery,
+ * Covers the JSON-RPC surface an MCP client drives: handshake, discovery,
  * calls, and the failure modes that used to show up as a dead handshake.
  */
 public class McpServerTest
@@ -22,7 +22,7 @@ public class McpServerTest
 	@Before
 	public void setUp()
 	{
-		mcp = new McpServer("gielinor-companion", "0.1.0", "test instructions")
+		mcp = new McpServer("runelite-mcp-server", "0.1.0", "test instructions")
 			.register(new McpTool("echo", "Echoes its argument", McpTool.noArgs(), args ->
 			{
 				JsonObject o = new JsonObject();
@@ -53,13 +53,13 @@ public class McpServerTest
 	{
 		JsonObject res = send("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
 			+ "\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},"
-			+ "\"clientInfo\":{\"name\":\"gielinor\",\"version\":\"1\"}}}");
+			+ "\"clientInfo\":{\"name\":\"test-client\",\"version\":\"1\"}}}");
 
 		JsonObject result = res.getAsJsonObject("result");
 		assertEquals("2.0", res.get("jsonrpc").getAsString());
 		assertEquals(1, res.get("id").getAsInt());
 		assertEquals("2025-03-26", result.get("protocolVersion").getAsString());
-		assertEquals("gielinor-companion", result.getAsJsonObject("serverInfo").get("name").getAsString());
+		assertEquals("runelite-mcp-server", result.getAsJsonObject("serverInfo").get("name").getAsString());
 		assertTrue(result.getAsJsonObject("capabilities").has("tools"));
 	}
 

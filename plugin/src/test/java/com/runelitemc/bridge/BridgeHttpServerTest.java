@@ -41,7 +41,7 @@ public class BridgeHttpServerTest
 			return o;
 		});
 
-		McpServer mcp = new McpServer("gielinor-companion", "0.1.0", null)
+		McpServer mcp = new McpServer("runelite-mcp-server", "0.1.0", null)
 			.register(new McpTool("ping_state", "test tool", McpTool.noArgs(), args ->
 			{
 				JsonObject o = new JsonObject();
@@ -111,11 +111,11 @@ public class BridgeHttpServerTest
 	{
 		Response res = post("/mcp", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
 			+ "\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
-			+ "\"clientInfo\":{\"name\":\"gielinor\",\"version\":\"1\"}}}");
+			+ "\"clientInfo\":{\"name\":\"test-client\",\"version\":\"1\"}}}");
 
 		assertEquals(200, res.status);
 		JsonObject body = gson.fromJson(res.body, JsonObject.class);
-		assertEquals("gielinor-companion",
+		assertEquals("runelite-mcp-server",
 			body.getAsJsonObject("result").getAsJsonObject("serverInfo").get("name").getAsString());
 	}
 

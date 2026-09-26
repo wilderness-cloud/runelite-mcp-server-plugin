@@ -4,8 +4,8 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
-@ConfigGroup("gielinorcompanion")
-public interface GielinorCompanionConfig extends Config
+@ConfigGroup("runelitemcpserver")
+public interface McpServerConfig extends Config
 {
 	@ConfigItem(
 		keyName = "port",

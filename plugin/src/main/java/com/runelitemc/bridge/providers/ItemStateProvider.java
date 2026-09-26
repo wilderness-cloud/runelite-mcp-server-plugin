@@ -173,11 +173,7 @@ public class ItemStateProvider
 		// shared item schema, and an integer in it fails validation for every
 		// consumer of game_state, whose bank section is this same object.
 		it.addProperty("bankSlot", slot);
-		String name = itemName(item.getId());
-		if (name != null && !name.isEmpty())
-		{
-			it.addProperty("name", name);
-		}
+		nameAndCharges(it, itemName(item.getId()));
 		return it;
 	}
 
@@ -284,11 +280,7 @@ public class ItemStateProvider
 			m.addProperty("container", containerName);
 			m.addProperty("id", item.getId());
 			m.addProperty("qty", item.getQuantity());
-			String name = itemName(item.getId());
-			if (name != null && !name.isEmpty())
-			{
-				m.addProperty("name", name);
-			}
+			nameAndCharges(m, itemName(item.getId()));
 			if (withSlots)
 			{
 				String slot = slotName(i);
@@ -368,12 +360,62 @@ public class ItemStateProvider
 		{
 			it.addProperty("slot", slot);
 		}
-		String name = itemName(item.getId());
-		if (name != null && !name.isEmpty())
-		{
-			it.addProperty("name", name);
-		}
+		nameAndCharges(it, itemName(item.getId()));
 		arr.add(it);
+	}
+
+	/**
+	 * Names the item and, when its name carries a "(n)" suffix, breaks that out
+	 * as a number. The suffix is how the game stores uses remaining on a whole
+	 * class of items — Ring of wealth (4), Digsite pendant (5), Skills necklace
+	 * (6), Prayer potion(4) — so leaving it inside the name means every consumer
+	 * has to parse strings to answer "how many teleports do I have left", which
+	 * is exactly the question that gets asked.
+	 */
+	private static void nameAndCharges(JsonObject out, String name)
+	{
+		if (name == null || name.isEmpty())
+		{
+			return;
+		}
+		out.addProperty("name", name);
+		Integer charges = chargesFromName(name);
+		if (charges != null)
+		{
+			out.addProperty("charges", charges);
+		}
+	}
+
+	/** The trailing "(n)" of an item name, or null when it has none. */
+	static Integer chargesFromName(String name)
+	{
+		int close = name.length() - 1;
+		if (close < 2 || name.charAt(close) != ')')
+		{
+			return null;
+		}
+		int open = name.lastIndexOf('(', close);
+		if (open < 1 || close - open < 2)
+		{
+			return null;
+		}
+		String digits = name.substring(open + 1, close);
+		for (int i = 0; i < digits.length(); i++)
+		{
+			if (digits.charAt(i) < '0' || digits.charAt(i) > '9')
+			{
+				return null;
+			}
+		}
+		try
+		{
+			return Integer.valueOf(digits);
+		}
+		catch (NumberFormatException e)
+		{
+			// A suffix too long to be a charge count, e.g. an id-like number
+			return null;
+		}
 	}
 
 	private String itemName(int id)

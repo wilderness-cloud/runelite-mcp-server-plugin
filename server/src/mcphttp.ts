@@ -13,6 +13,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { registerTools } from "./tools.js";
+import { SERVER_NAME, VERSION } from "./version.js";
 
 export const DEFAULT_HTTP_PORT = 8766;
 const MCP_PATH = "/mcp";
@@ -67,7 +68,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 }
 
 async function newSession(): Promise<StreamableHTTPServerTransport> {
-	const server = new McpServer({ name: "osrs-companion", version: "0.1.0" });
+	const server = new McpServer({ name: SERVER_NAME, version: VERSION });
 	registerTools(server);
 	const transport = new StreamableHTTPServerTransport({
 		sessionIdGenerator: () => randomUUID(),
@@ -103,7 +104,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
 	if (path === "/health" || path === "/") {
 		send(res, 200, {
-			service: "osrs-companion-mcp",
+			service: "runelite-mcp-companion-server",
 			transport: "streamable-http",
 			endpoint: MCP_PATH,
 			sessions: sessions.size,

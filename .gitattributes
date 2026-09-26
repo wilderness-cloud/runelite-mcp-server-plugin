@@ -1,0 +1,21 @@
+# Only the files whose line endings actually matter are pinned. Deliberately no
+# blanket `* text=auto`: the repository already stores LF throughout, and turning
+# normalisation on would rewrite every source file in existing Windows checkouts
+# for no gain.
+
+# Windows batch files need CRLF: a .cmd checked out with LF endings can mis-parse
+# labels and multi-line blocks.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Run by a POSIX shell in CI, so they must stay LF even in a Windows checkout —
+# a CR at the end of a shebang or a command line makes a script unrunnable.
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Generated reference data: keep it out of diffs and language stats.
+plugin/src/main/resources/farming/farming-data.json linguist-generated=true
+package-lock.json linguist-generated=true
+server/package-lock.json linguist-generated=true
+
+*.jar binary

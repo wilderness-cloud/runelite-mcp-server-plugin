@@ -19,7 +19,10 @@ public final class BuildInfo
 {
 	private static final String RESOURCE = "/build-info.properties";
 	private static final String UNKNOWN = "dev";
+	/** Semver-shaped, so a client that parses serverInfo.version still can. */
+	private static final String UNKNOWN_VERSION = "0.0.0-dev";
 
+	private static final String VERSION;
 	private static final String BUILD;
 	private static final String BUILT_AT;
 
@@ -37,18 +40,29 @@ public final class BuildInfo
 		{
 			// Stamp is diagnostic, never a reason to fail startup.
 		}
-		BUILD = value(props, "build");
-		BUILT_AT = value(props, "builtAt");
+		VERSION = value(props, "version", UNKNOWN_VERSION);
+		BUILD = value(props, "build", UNKNOWN);
+		BUILT_AT = value(props, "builtAt", UNKNOWN);
 	}
 
 	private BuildInfo()
 	{
 	}
 
-	private static String value(Properties props, String key)
+	private static String value(Properties props, String key, String fallback)
 	{
 		String v = props.getProperty(key);
-		return v == null || v.isEmpty() || v.startsWith("@") ? UNKNOWN : v;
+		return v == null || v.isEmpty() || v.startsWith("@") ? fallback : v;
+	}
+
+	/**
+	 * The release this jar declares, from {@code version} in build.gradle. That
+	 * is the single source of it: the release workflow bumps it there from the
+	 * merged PR's semver label and every other copy is generated.
+	 */
+	public static String version()
+	{
+		return VERSION;
 	}
 
 	/** Short git SHA, with "-dirty" when built from an unclean tree, or "dev". */

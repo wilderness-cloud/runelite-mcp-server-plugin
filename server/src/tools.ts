@@ -8,9 +8,9 @@ import {
 	type SnapshotPayload,
 } from "./bridge.js";
 import { getQuestData } from "./questdata.js";
-import { priceReport, resolveItem, valuate } from "./prices.js";
+import { getTimeseries, priceReport, resolveItem, summarizeSeries, valuate, type Lookback } from "./prices.js";
 import { solve, playerStateFromSnapshot } from "./solver.js";
-import { rawWikitext, searchTitles, truncate, wikiUrl } from "./wiki.js";
+import { wikiUrl } from "./wiki.js";
 import { summarizeGained, womGained, type GainedPeriod } from "./wom.js";
 
 function text(body: string, isError = false)
@@ -56,6 +56,50 @@ function transitiveClosure(name: string, data: Awaited<ReturnType<typeof getQues
 	};
 	walk(name);
 	return [...new Set(out)];
+}
+
+
+/** One item's entry in the plugin's observed four-hour buying, if it has one. */
+interface BuyLimitUsage {
+	buyLimitUsage?: {
+		isFloor?: boolean;
+		trackingSince?: string;
+		note?: string;
+		items?: { itemId: number; boughtInWindow: number; windowResetsAt?: string }[];
+	};
+}
+
+/**
+ * The half of a buy limit each side knows: the per-item cap comes from the GE
+ * mapping, what is already spent against it only from watching the player's own
+ * offers. Neither is any use alone when the question is "can I place this
+ * order", so they are joined here.
+ *
+ * Absent when the game client is not running, and always a best case: the
+ * plugin's count is a floor (see the grand_exchange tool).
+ */
+async function buyLimitFor(itemId: number, limit: number | undefined) {
+	if (limit === undefined) {
+		return { limit: null, note: "The Grand Exchange mapping lists no buy limit for this item." };
+	}
+	const ge = await tryBridgeGet<BuyLimitUsage>("/grand-exchange");
+	if (!ge.ok || !ge.data.buyLimitUsage) {
+		return {
+			limit,
+			note: "Buy every 4 hours. How much of that is already spent is unknown: it needs the game client "
+				+ "running with the RuneLite MCP Server plugin, which watches your own offers fill.",
+		};
+	}
+	const usage = ge.data.buyLimitUsage;
+	const row = usage.items?.find((i) => i.itemId === itemId);
+	return {
+		limit,
+		observedBought: row?.boughtInWindow ?? 0,
+		remainingAtBest: Math.max(0, limit - (row?.boughtInWindow ?? 0)),
+		windowResetsAt: row?.windowResetsAt,
+		isFloor: true,
+		note: usage.note ?? "Observed buying is a lower bound, so remainingAtBest is an upper bound.",
+	};
 }
 
 export function registerTools(server: McpServer): void
@@ -149,6 +193,49 @@ export function registerTools(server: McpServer): void
 			const report = await priceReport(item);
 			return json({
 				...report,
+				buyLimit: await buyLimitFor(item.id, item.limit),
+				wiki: wikiUrl(item.name),
+			});
+		},
+	);
+
+
+	server.tool(
+		"ge_history",
+		"Grand Exchange price history for one item: averaged high/low prices with volumes over the window you ask for, plus a summary — change across the window, min/max, and traded volume per day. USE THIS before a bulk order or a flip: the spot price alone cannot say whether an item is drifting, spiking, or barely traded, and a thin item will not fill 100 of anything at the price ge_price quotes. Pair it with the buy limit in ge_price when sizing an order.",
+		{
+			nameOrId: z.string().describe("Item name (exact, prefix, or substring) or numeric item id"),
+			lookback: z.enum(["24h", "7d", "30d", "1y"]).default("30d")
+				.describe("How far back to look. The price API picks the granularity to match: 24h arrives in 5-minute steps, 7d hourly, 30d six-hourly, 1y daily."),
+			points: z.number().int().min(1).max(365).optional()
+				.describe("How many of the most recent points to return in full. The summary always covers the whole series. Default 48."),
+		},
+		async ({ nameOrId, lookback, points }) =>
+		{
+			const item = await resolveItem(nameOrId);
+			if (!item)
+			{
+				return text(`No GE-traded item matches "${nameOrId}".`, true);
+			}
+			const series = await getTimeseries(item.id, lookback as Lookback);
+			if (series.length === 0)
+			{
+				return text(`The price API has no ${lookback} history for ${item.name}.`);
+			}
+			const keep = points ?? 48;
+			return json({
+				item: { id: item.id, name: item.name, limit: item.limit },
+				lookback,
+				summary: summarizeSeries(series),
+				pointsReturned: Math.min(keep, series.length),
+				pointsOmitted: Math.max(0, series.length - keep),
+				series: series.slice(-keep).map((p) => ({
+					at: new Date(p.timestamp * 1000).toISOString(),
+					avgHighPrice: p.avgHighPrice,
+					avgLowPrice: p.avgLowPrice,
+					highPriceVolume: p.highPriceVolume,
+					lowPriceVolume: p.lowPriceVolume,
+				})),
 				wiki: wikiUrl(item.name),
 			});
 		},
@@ -191,46 +278,10 @@ export function registerTools(server: McpServer): void
 				return text(`No item matches "${name}".`, true);
 			}
 			const report = await priceReport(item);
-			return json({ ...report, wiki: wikiUrl(item.name) });
-		},
-	);
-
-	server.tool(
-		"boss_info",
-		"Boss summary: your current killcount (if the game client is running) plus the intro section of the boss's wiki page and a link to its strategy page.",
-		{ name: z.string().describe("Boss name, e.g. 'Vorkath' or 'Zulrah'") },
-		async ({ name }) =>
-		{
-			const q = name.toLowerCase();
-			let killcount: number | undefined;
-			try
-			{
-				const kc = await bridgeGet<{ bosses: { name: string; kills?: number }[] }>("/kc", 4000);
-				killcount = kc.bosses?.find((b) => b.name.toLowerCase().includes(q))?.kills;
-			}
-			catch
-			{
-				// client offline; KC just omitted
-			}
-
-			const titles = await searchTitles(name, 5);
-			const best = titles[0] ?? name;
-			let excerpt = "";
-			try
-			{
-				excerpt = truncate(await rawWikitext(best), 2500);
-			}
-			catch
-			{
-				// wiki unreachable
-			}
-
 			return json({
-				query: name,
-				killcount,
-				wikiPage: wikiUrl(best),
-				strategyPage: wikiUrl(`${best}/Strategies`),
-				wikitextExcerpt: excerpt,
+				...report,
+				buyLimit: await buyLimitFor(item.id, item.limit),
+				wiki: wikiUrl(item.name),
 			});
 		},
 	);

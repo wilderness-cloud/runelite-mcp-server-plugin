@@ -1,0 +1,290 @@
+{
+  "name": "farming_state",
+  "description": "Answers 'what needs doing on my farm run, and when?' — every farming patch the player has visited, with what is planted, whether it is ready, diseased or dead, and when each growing crop finishes, plus the bird house cycle. USE THIS before writing any farm-run, herb-run, tree-run or bird house advice: without it you can only give a generic guide, with it you can give a dated checklist. Patches are returned ready-first then soonest-first. Read from RuneLite's Time Tracking observations, not live varbits — the game only reveals a patch while the player is standing in its region, so each entry is the last state seen (observedAt / observedSecondsAgo) with growth predicted forward from it, which is exact because farming ticks are wall-clock. Patches never visited on this account are omitted entirely rather than reported as empty. Needs RuneLite's Time Tracking plugin enabled (it is by default); available is false when nothing has ever been recorded. Patches with nothing planted are hidden unless includeBare is set.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tabs": {
+        "type": "array",
+        "description": "Restrict to these patch groups, using RuneLite's Time Tracking tabs. Omit for all of them. SPECIAL covers the one-off patches: hespori, mushroom, belladonna, cactus, seaweed, anima, coral and compost bins.",
+        "items": {
+          "type": "string",
+          "enum": [
+            "HERB",
+            "TREE",
+            "FRUIT_TREE",
+            "ALLOTMENT",
+            "FLOWER",
+            "HOPS",
+            "BUSH",
+            "GRAPE",
+            "SPECIAL"
+          ]
+        }
+      },
+      "states": {
+        "type": "array",
+        "description": "Restrict to these crop states. Omit for all. Use ['DISEASED','DEAD'] for 'what did I lose', or ['HARVESTABLE'] for 'what can I pick right now'.",
+        "items": {
+          "type": "string",
+          "enum": [
+            "HARVESTABLE",
+            "GROWING",
+            "DISEASED",
+            "DEAD",
+            "EMPTY",
+            "FILLING",
+            "UNKNOWN"
+          ]
+        }
+      },
+      "includeBare": {
+        "type": "boolean",
+        "description": "Include patches with nothing planted — bare, weeding up, or holding a scarecrow. Off by default: a farm-run checklist wants the patches that need something. Turn it on to answer 'where could I plant?'."
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "description": "available false means nothing has been observed yet, which is not the same as having no crops.",
+    "required": [
+      "capturedAt",
+      "available"
+    ],
+    "properties": {
+      "capturedAt": {
+        "type": "string",
+        "description": "When this answer was computed. ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied."
+      },
+      "available": {
+        "type": "boolean"
+      },
+      "note": {
+        "type": "string",
+        "description": "Why nothing could be read, e.g. Time Tracking has never recorded a patch on this account."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Counts across every observed patch, before the tabs/states/includeBare filters are applied — so a filtered call still shows the whole picture.",
+        "properties": {
+          "observedPatches": {
+            "type": "integer",
+            "description": "How many patches have ever been seen on this account."
+          },
+          "harvestable": {
+            "type": "integer"
+          },
+          "growing": {
+            "type": "integer"
+          },
+          "diseased": {
+            "type": "integer"
+          },
+          "dead": {
+            "type": "integer"
+          },
+          "empty": {
+            "type": "integer"
+          },
+          "filling": {
+            "type": "integer"
+          },
+          "unknown": {
+            "type": "integer"
+          }
+        }
+      },
+      "patches": {
+        "type": "array",
+        "description": "Matching patches, ready first then soonest-ready first.",
+        "items": {
+          "type": "object",
+          "required": [
+            "region",
+            "type",
+            "patchGroup",
+            "state",
+            "ready",
+            "bare",
+            "observedAt"
+          ],
+          "properties": {
+            "region": {
+              "type": "string",
+              "description": "Where the patch is, e.g. 'Catherby', 'Farming Guild'."
+            },
+            "patch": {
+              "type": "string",
+              "description": "Disambiguator when a region has more than one patch of this type, e.g. 'North'. Absent when the region has only one."
+            },
+            "type": {
+              "type": "string",
+              "description": "Patch implementation, e.g. HERB, HARDWOOD_TREE, CALQUAT."
+            },
+            "patchGroup": {
+              "type": "string",
+              "description": "The Time Tracking tab this patch groups under; matches the tabs argument."
+            },
+            "produce": {
+              "type": "string",
+              "description": "What is planted, e.g. 'Ranarr', 'Yew', 'Weeds'. Weeds or Scarecrow means the patch is effectively bare."
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "HARVESTABLE",
+                "GROWING",
+                "DISEASED",
+                "DEAD",
+                "EMPTY",
+                "FILLING",
+                "UNKNOWN"
+              ],
+              "description": "Crop state as of observedAt. DISEASED can still be cured; DEAD cannot and the patch must be cleared."
+            },
+            "ready": {
+              "type": "boolean",
+              "description": "The crop can be picked or chopped now. True for HARVESTABLE, and for a GROWING crop whose last growth tick has already passed since it was observed."
+            },
+            "bare": {
+              "type": "boolean",
+              "description": "Nothing is planted here: the patch is empty, weeding up, holds a scarecrow, or is a compost bin still filling. Filtered out unless includeBare."
+            },
+            "stage": {
+              "type": "integer",
+              "description": "Growth stage reached, predicted forward from the observation."
+            },
+            "stages": {
+              "type": "integer",
+              "description": "Stages this crop has in its current phase. While HARVESTABLE this is the number of harvests ('lives') remaining rather than growth steps."
+            },
+            "readyAt": {
+              "type": "string",
+              "description": "When the crop finishes growing. ISO-8601 instant, UTC. Absent when it is already ready, dead, diseased or bare."
+            },
+            "readyInSeconds": {
+              "type": "integer",
+              "description": "Seconds until readyAt, relative to capturedAt. Negative values do not occur; such a patch is reported ready instead."
+            },
+            "regrowsAt": {
+              "type": "string",
+              "description": "For a crop that is harvestable AND regrows (bushes, fruit trees, cactus): when the next regrow tick lands. The crop can be picked now regardless. ISO-8601 instant, UTC."
+            },
+            "needsHealthCheck": {
+              "type": "boolean",
+              "description": "A tree or bush that has finished growing but still needs its health checked before it produces."
+            },
+            "observedAt": {
+              "type": "string",
+              "description": "When the player last saw this patch. ISO-8601 instant, UTC. Everything above is predicted from this moment; a patch changed by other means reads stale until it is next seen."
+            },
+            "observedSecondsAgo": {
+              "type": "integer"
+            },
+            "varbitValue": {
+              "type": "integer",
+              "description": "Present only with state UNKNOWN: the raw value the decode tables did not cover."
+            },
+            "note": {
+              "type": "string",
+              "description": "Present only with state UNKNOWN."
+            }
+          }
+        }
+      },
+      "birdHouses": {
+        "type": "object",
+        "description": "The Fossil Island bird house loop. Same observation rules as patches: read from the last time the player passed them.",
+        "required": [
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "False means no bird house has ever been observed on this account."
+          },
+          "note": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "readyToDismantle": {
+                "type": "integer",
+                "description": "Seeded houses whose 50 minutes are up."
+              },
+              "filling": {
+                "type": "integer",
+                "description": "Seeded houses still filling."
+              },
+              "needsSeeding": {
+                "type": "integer",
+                "description": "Spaces that are empty or hold an unseeded house — they will never fill as they are."
+              },
+              "nextReadyAt": {
+                "type": "string",
+                "description": "When the soonest still-filling house is done. ISO-8601 instant, UTC. Absent when none are filling."
+              },
+              "nextReadyInSeconds": {
+                "type": "integer"
+              }
+            }
+          },
+          "houses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "space",
+                "state",
+                "observedAt"
+              ],
+              "properties": {
+                "space": {
+                  "type": "string",
+                  "description": "Which of the four spaces, e.g. 'Mushroom Meadow (North)'."
+                },
+                "type": {
+                  "type": "string",
+                  "description": "The house built there, e.g. 'Yew Bird House'. Absent when the space is empty."
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "SEEDED",
+                    "BUILT",
+                    "EMPTY",
+                    "UNKNOWN"
+                  ],
+                  "description": "SEEDED is filling or full; BUILT is placed but unseeded and will never fill; EMPTY has no house."
+                },
+                "ready": {
+                  "type": "boolean",
+                  "description": "Present on SEEDED houses: true once the 50 minutes are up."
+                },
+                "readyAt": {
+                  "type": "string",
+                  "description": "ISO-8601 instant, UTC. Absent once ready."
+                },
+                "readyInSeconds": {
+                  "type": "integer"
+                },
+                "observedAt": {
+                  "type": "string",
+                  "description": "ISO-8601 instant, UTC."
+                },
+                "observedSecondsAgo": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "dataSource": {
+        "type": "string",
+        "description": "Which RuneLite release the patch and produce tables were generated from."
+      }
+    }
+  }
+}

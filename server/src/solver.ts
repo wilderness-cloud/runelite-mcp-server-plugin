@@ -205,11 +205,11 @@ export function solve(target: string, data: QuestData, player: PlayerState): Sol
 	emit(target, new Set());
 
 	const skillGaps = [...skillSources.values()].sort((a, b) => b.need - a.need);
-	const ready = ordered.length === 0 && skillGaps.length === 0 && targetState === "FINISHED" ? true : ordered.length === 0 && skillGaps.length === 0;
 
 	return {
 		target,
 		targetState,
+		// "Ready to start", not "done": targetState reports completion separately.
 		ready: ordered.length === 0 && skillGaps.length === 0,
 		missingQuests: ordered,
 		skillGaps,

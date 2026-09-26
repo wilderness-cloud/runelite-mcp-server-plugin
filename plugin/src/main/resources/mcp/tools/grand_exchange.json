@@ -1,0 +1,147 @@
+{
+  "name": "grand_exchange",
+  "description": "The player's eight Grand Exchange slots — what is being bought or sold, at what price, and how much has filled — plus how much of each item this plugin has watched them buy in the last four hours. USE THIS before advising a purchase of any size: a 100-seed order against a 200-per-4h limit needs to know what is already spent, and nothing else in this API can say. The buy-limit figure is a LOWER BOUND, not the truth: Jagex expose neither the limit nor an account's usage of it anywhere, so this is counted from offers the plugin actually watched fill. Buys made before the plugin started, while it was off, on another device, or already filled when an offer was first seen are missing from it. The per-item limit itself is not here either — it comes from the Grand Exchange item mapping (item_info), and the caller subtracts. Each item's four-hour window starts at that item's first purchase, which is how the game's limit works; it is not a fixed wall-clock bucket.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": [
+      "capturedAt",
+      "offers",
+      "activeOffers"
+    ],
+    "properties": {
+      "capturedAt": {
+        "type": "string",
+        "description": "ISO-8601 instant, UTC. Transported as a JSON string; no native date-time type is implied."
+      },
+      "activeOffers": {
+        "type": "integer",
+        "description": "How many of the eight slots hold an offer. Zero is a real answer, not an error."
+      },
+      "offers": {
+        "type": "array",
+        "description": "Occupied slots only; empty slots are omitted.",
+        "items": {
+          "type": "object",
+          "required": [
+            "geSlot",
+            "state",
+            "buying",
+            "itemId"
+          ],
+          "properties": {
+            "geSlot": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7,
+              "description": "Which of the eight Grand Exchange slots, 0-7. Named geSlot, not slot: slot is the worn-equipment enum elsewhere in this API."
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "BUYING",
+                "BOUGHT",
+                "SELLING",
+                "SOLD",
+                "CANCELLED_BUY",
+                "CANCELLED_SELL"
+              ],
+              "description": "BOUGHT and SOLD mean finished but not yet collected."
+            },
+            "buying": {
+              "type": "boolean",
+              "description": "True for a buy offer in any of its states; false for a sell. Only buys count against a buy limit."
+            },
+            "itemId": {
+              "type": "integer"
+            },
+            "item": {
+              "type": "string",
+              "description": "Item name, when the client's cache can resolve the id."
+            },
+            "pricePerItem": {
+              "type": "integer",
+              "description": "The price the offer was placed at, per item — not the market price. Use ge_price for that."
+            },
+            "totalQuantity": {
+              "type": "integer",
+              "description": "How many the offer is for."
+            },
+            "quantityFilled": {
+              "type": "integer",
+              "description": "How many have traded so far."
+            },
+            "coinsExchanged": {
+              "type": "integer",
+              "description": "Coins spent (buy) or received (sell) so far."
+            }
+          }
+        }
+      },
+      "buyLimitUsage": {
+        "type": "object",
+        "description": "Per-item buying observed inside the last four hours. A lower bound — read isFloor and note before treating a number as the account's real usage.",
+        "required": [
+          "windowSeconds",
+          "isFloor",
+          "items"
+        ],
+        "properties": {
+          "windowSeconds": {
+            "type": "integer",
+            "description": "Length of the buy-limit window, 14400 (4 hours)."
+          },
+          "trackingSince": {
+            "type": "string",
+            "description": "When this plugin started watching offers. Anything bought before it is invisible. ISO-8601 instant, UTC."
+          },
+          "isFloor": {
+            "type": "boolean",
+            "description": "Always true: the counts can only understate what was bought, never overstate it."
+          },
+          "note": {
+            "type": "string",
+            "description": "Spells out what the count cannot see."
+          },
+          "items": {
+            "type": "array",
+            "description": "One entry per item bought inside the window. An item absent from this list has no observed purchases — which is not proof none were made.",
+            "items": {
+              "type": "object",
+              "required": [
+                "itemId",
+                "boughtInWindow"
+              ],
+              "properties": {
+                "itemId": {
+                  "type": "integer"
+                },
+                "item": {
+                  "type": "string"
+                },
+                "boughtInWindow": {
+                  "type": "integer",
+                  "description": "Quantity observed bought since windowStartedAt. Subtract from the item's limit (item_info) for a best-case remaining allowance."
+                },
+                "windowStartedAt": {
+                  "type": "string",
+                  "description": "First observed purchase of this item in the window; the game's four hours run from the account's first purchase. ISO-8601 instant, UTC."
+                },
+                "windowResetsAt": {
+                  "type": "string",
+                  "description": "windowStartedAt plus four hours — when the allowance for this item refreshes. ISO-8601 instant, UTC."
+                },
+                "windowResetsInSeconds": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

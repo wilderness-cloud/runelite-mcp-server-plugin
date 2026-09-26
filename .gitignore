@@ -4,8 +4,8 @@ plugin/.gradle/
 plugin/out/
 *.class
 
-# Node
-server/node_modules/
+# Node — the root install is the release toolchain, server/ is the companion server
+node_modules/
 server/dist/
 server/.cache/
 
@@ -17,3 +17,6 @@ server/.cache/
 # OS
 Thumbs.db
 .DS_Store
+
+# Session/agent scratch
+.zcode/

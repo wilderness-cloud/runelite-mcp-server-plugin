@@ -24,6 +24,7 @@ import net.runelite.api.ScriptID;
 import net.runelite.api.Varbits;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.UsernameChanged;
@@ -39,9 +40,13 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.util.Text;
 import com.runelitemc.bridge.mcp.McpServer;
 import com.runelitemc.bridge.mcp.McpToolCatalog;
+import com.runelitemc.bridge.providers.ActivitiesProvider;
 import com.runelitemc.bridge.providers.BossKcProvider;
+import com.runelitemc.bridge.providers.ChargesProvider;
 import com.runelitemc.bridge.providers.CollectionLogProvider;
 import com.runelitemc.bridge.providers.CombatAchievementsProvider;
+import com.runelitemc.bridge.providers.FarmingData;
+import com.runelitemc.bridge.providers.FarmingProvider;
 import com.runelitemc.bridge.providers.ItemStateProvider;
 import com.runelitemc.bridge.providers.PlayerStateProvider;
 import com.runelitemc.bridge.providers.ProgressProvider;
@@ -49,13 +54,13 @@ import com.runelitemc.bridge.providers.SlayerProvider;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Gielinor Companion",
-	description = "Serves your live account state to the Gielinor app (or any MCP client) over localhost. Read-only.",
-	tags = {"gielinor", "mcp", "llm", "companion"}
+	name = "RuneLite MCP Server",
+	description = "Serves your live account state to an MCP client over localhost. Read-only.",
+	tags = {"mcp", "llm", "ai", "assistant", "agent"}
 )
-public class GielinorCompanionPlugin extends Plugin
+public class McpServerPlugin extends Plugin
 {
-	static final String CONFIG_GROUP = "gielinorcompanion";
+	static final String CONFIG_GROUP = "runelitemcpserver";
 
 	/**
 	 * Top-level keys of {@link SnapshotService#snapshot()}. The authoritative list
@@ -64,7 +69,7 @@ public class GielinorCompanionPlugin extends Plugin
 	 */
 	static final List<String> SNAPSHOT_SECTIONS = Arrays.asList(
 		"state", "quests", "diaries", "combatAchievements", "slayer",
-		"bossKc", "inventory", "equipment", "bank", "collectionLog");
+		"bossKc", "inventory", "equipment", "bank", "collectionLog", "activities", "charges");
 
 	@Inject
 	private Client client;
@@ -73,16 +78,20 @@ public class GielinorCompanionPlugin extends Plugin
 	private ClientThread clientThread;
 
 	@Inject
-	private GielinorCompanionConfig config;
+	private McpServerConfig config;
+
+	@Inject
+	private ConfigManager configManager;
 
 	private final RuntimeState runtimeState = new RuntimeState();
 	private final CollectionLogCapture collectionLogCapture = new CollectionLogCapture();
+	private final GrandExchangeTracker grandExchange = new GrandExchangeTracker();
 	private BridgeHttpServer server;
 
 	@com.google.inject.Provides
-	GielinorCompanionConfig provideConfig(ConfigManager configManager)
+	McpServerConfig provideConfig(ConfigManager configManager)
 	{
-		return configManager.getConfig(GielinorCompanionConfig.class);
+		return configManager.getConfig(McpServerConfig.class);
 	}
 
 	@Override
@@ -111,7 +120,12 @@ public class GielinorCompanionPlugin extends Plugin
 		SlayerProvider slayer = new SlayerProvider(client);
 		BossKcProvider bossKc = new BossKcProvider(client);
 		CollectionLogProvider collectionLog = new CollectionLogProvider(client, collectionLogCapture);
-		SnapshotService snapshots = new SnapshotService(playerState, itemState, progress, combatAchievements, slayer, bossKc, collectionLog);
+		FarmingData farmingData = FarmingData.load();
+		FarmingProvider farming = new FarmingProvider(client, configManager, farmingData);
+		ActivitiesProvider activities = new ActivitiesProvider(client, farmingData);
+		ChargesProvider charges = new ChargesProvider(client, configManager);
+		SnapshotService snapshots = new SnapshotService(playerState, itemState, progress, combatAchievements,
+			slayer, bossKc, collectionLog, activities, charges);
 
 		Map<String, BridgeHttpServer.Responder> routes = new HashMap<>();
 		routes.put("/health", this::health);
@@ -125,9 +139,15 @@ public class GielinorCompanionPlugin extends Plugin
 		routes.put("/equipment", () -> onClientThread(itemState::equipment));
 		routes.put("/bank", () -> onClientThread(itemState::bank));
 		routes.put("/collection-log", () -> onClientThread(collectionLog::collectionLog));
+		routes.put("/grand-exchange", () -> onClientThread(
+			() -> grandExchange.grandExchange(client.getGrandExchangeOffers(), this::itemName)));
+		routes.put("/activities", () -> onClientThread(activities::activities));
+		routes.put("/charges", () -> onClientThread(() -> charges.charges(false)));
+		routes.put("/farming", () -> onClientThread(() -> farming.farming(null, null, false)));
+		routes.put("/birdhouses", () -> onClientThread(farming::birdHouses));
 		routes.put("/snapshot", () -> onClientThread(snapshots::snapshot));
 
-		McpServer mcp = buildMcpServer(itemState, combatAchievements, collectionLog, snapshots);
+		McpServer mcp = buildMcpServer(itemState, combatAchievements, collectionLog, farming, snapshots);
 
 		try
 		{
@@ -155,11 +175,16 @@ public class GielinorCompanionPlugin extends Plugin
 	 * The MCP tool surface: live account state only. Reference data (wiki quest
 	 * requirements, GE prices, Wise Old Man history) is the client app's job —
 	 * it can update that without anyone reinstalling a plugin.
+	 *
+	 * <p>Package-private rather than private so {@link BuildInfoTest} can check
+	 * what this reports as serverInfo.version: a client compares that against the
+	 * release it expects, so a hardcoded copy here would prompt for a restart
+	 * that no update ever satisfies.
 	 */
-	private McpServer buildMcpServer(ItemStateProvider itemState, CombatAchievementsProvider combatAchievements,
-		CollectionLogProvider collectionLog, SnapshotService snapshots)
+	McpServer buildMcpServer(ItemStateProvider itemState, CombatAchievementsProvider combatAchievements,
+		CollectionLogProvider collectionLog, FarmingProvider farming, SnapshotService snapshots)
 	{
-		return new McpServer("gielinor-companion", "0.1.0",
+		return new McpServer("runelite-mcp-server", BuildInfo.version(),
 			"Live Old School RuneScape account state read from the player's running RuneLite client. "
 				+ "Read-only: this cannot click, move, or change anything in game. "
 				+ "Start with game_state; it covers skills, quests, diaries, slayer, boss KC, and carried items in one call.")
@@ -174,7 +199,13 @@ public class GielinorCompanionPlugin extends Plugin
 					str(args, "page"), str(args, "search"), bool(args, "obtained")))))
 			.register(McpToolCatalog.load("bank_snapshot", args -> onClientThread(itemState::bank)))
 			.register(McpToolCatalog.load("find_item",
-				args -> onClientThread(() -> itemState.findItem(str(args, "query"), containers(args)))));
+				args -> onClientThread(() -> itemState.findItem(str(args, "query"), containers(args)))))
+			.register(McpToolCatalog.load("grand_exchange",
+				args -> onClientThread(() -> grandExchange.grandExchange(
+					client.getGrandExchangeOffers(), this::itemName))))
+			.register(McpToolCatalog.load("farming_state",
+				args -> onClientThread(() -> farming.farming(
+					strings(args, "tabs"), strings(args, "states"), Boolean.TRUE.equals(bool(args, "includeBare"))))));
 	}
 
 	private static String str(JsonObject args, String key)
@@ -186,6 +217,24 @@ public class GielinorCompanionPlugin extends Plugin
 		}
 		String v = e.getAsString().trim();
 		return v.isEmpty() ? null : v;
+	}
+
+	/** A string-array argument, or an empty set when absent. */
+	private static Set<String> strings(JsonObject args, String key)
+	{
+		Set<String> out = new LinkedHashSet<>();
+		JsonElement e = args.get(key);
+		if (e != null && e.isJsonArray())
+		{
+			for (JsonElement entry : e.getAsJsonArray())
+			{
+				if (entry.isJsonPrimitive())
+				{
+					out.add(entry.getAsString());
+				}
+			}
+		}
+		return out;
 	}
 
 	private static Boolean bool(JsonObject args, String key)
@@ -296,8 +345,8 @@ public class GielinorCompanionPlugin extends Plugin
 	{
 		JsonObject o = new JsonObject();
 		o.addProperty("status", "ok");
-		o.addProperty("service", "gielinor-companion");
-		o.addProperty("version", "0.1.0");
+		o.addProperty("service", "runelite-mcp-server");
+		o.addProperty("version", BuildInfo.version());
 		// Which jar is actually running. The version string does not move
 		// between builds, so it cannot answer that on its own.
 		o.addProperty("build", BuildInfo.build());
@@ -321,11 +370,16 @@ public class GielinorCompanionPlugin extends Plugin
 	public void onGameStateChanged(GameStateChanged event)
 	{
 		runtimeState.setGameState(event.getGameState().name());
-		if (event.getGameState() != GameState.LOGGED_IN)
+		if (event.getGameState() == GameState.LOGIN_SCREEN)
 		{
-			// Never serve one account's snapshots to another session
+			// Never serve one account's snapshots to another session. Only a
+			// return to the login screen ends a session: LOADING fires on every
+			// teleport, staircase and world hop, and clearing on it threw away
+			// the bank snapshot (which only exists client-side once the bank has
+			// been opened) several times an hour.
 			runtimeState.clearBank();
 			collectionLogCapture.clear();
+			grandExchange.clear();
 		}
 		if (event.getGameState() == GameState.LOGGED_IN)
 		{
@@ -334,6 +388,26 @@ public class GielinorCompanionPlugin extends Plugin
 			{
 				runtimeState.setUsername(username);
 			}
+		}
+	}
+
+	@Subscribe
+	public void onGrandExchangeOfferChanged(GrandExchangeOfferChanged event)
+	{
+		grandExchange.observe(event.getSlot(), event.getOffer());
+	}
+
+	/** Item name for a numeric id, empty when the cache cannot answer. */
+	private String itemName(int id)
+	{
+		try
+		{
+			net.runelite.api.ItemComposition comp = client.getItemDefinition(id);
+			return comp == null ? null : comp.getName();
+		}
+		catch (Exception e)
+		{
+			return null;
 		}
 	}
 

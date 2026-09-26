@@ -24,7 +24,8 @@ import org.junit.Test;
 public class ToolSchemaTest
 {
 	private static final List<String> TOOLS = Arrays.asList(
-		"client_status", "game_state", "combat_achievements", "collection_log", "bank_snapshot", "find_item");
+		"client_status", "game_state", "combat_achievements", "collection_log", "bank_snapshot", "find_item",
+		"farming_state", "grand_exchange");
 
 	private static final McpTool.Handler NOOP = args -> new JsonObject();
 
@@ -86,7 +87,7 @@ public class ToolSchemaTest
 		{
 			fromSchema.add(e.getAsString());
 		}
-		assertEquals(GielinorCompanionPlugin.SNAPSHOT_SECTIONS, fromSchema);
+		assertEquals(McpServerPlugin.SNAPSHOT_SECTIONS, fromSchema);
 
 		// Each section also needs somewhere to land in the output schema.
 		JsonObject properties = McpToolCatalog.load("game_state", NOOP).describe()
@@ -153,7 +154,7 @@ public class ToolSchemaTest
 	 * clients: a consumer compiling these schemas through a validator that maps
 	 * format: "date-time" onto a native date type rejects every successful
 	 * response, because a JSON string can never satisfy it. That blocked the
-	 * Gielinor client on all four tools that carry a capturedAt.
+	 * client on all four tools that carry a capturedAt.
 	 */
 	@Test
 	public void noSchemaDeclaresAFormatKeyword()

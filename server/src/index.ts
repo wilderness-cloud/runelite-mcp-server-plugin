@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerTools } from "./tools.js";
 import { DEFAULT_HTTP_PORT, startHttpServer } from "./mcphttp.js";
+import { SERVER_NAME, VERSION } from "./version.js";
 
 type Options = { http: boolean; port: number; host: string };
 
@@ -77,7 +78,7 @@ async function main(): Promise<void>
 		return;
 	}
 
-	const server = new McpServer({ name: "osrs-companion", version: "0.1.0" });
+	const server = new McpServer({ name: SERVER_NAME, version: VERSION });
 	registerTools(server);
 	const transport = new StdioServerTransport();
 	await server.connect(transport);

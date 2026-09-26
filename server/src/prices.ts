@@ -130,3 +130,93 @@ export async function valuate(items: BankItem[], topN = 15): Promise<Valuation> 
 	valued.sort((a, b) => (b.totalHigh ?? 0) - (a.totalHigh ?? 0));
 	return { totalHigh, totalLow, valuedItems: valued.length, unpriced, top: valued.slice(0, topN) };
 }
+
+export interface TimeseriesPoint {
+	timestamp: number;
+	avgHighPrice: number | null;
+	avgLowPrice: number | null;
+	highPriceVolume: number;
+	lowPriceVolume: number;
+}
+
+/**
+ * How far back to look. The API picks the granularity to match — 24h comes back
+ * in 5-minute steps, 1y in daily ones — so a caller asks for a span, not a step.
+ */
+export type Lookback = "24h" | "7d" | "30d" | "1y";
+
+/**
+ * Price history for one item. Spot price alone says nothing about whether the
+ * thing is moving or whether it trades at all, which is what a bulk order
+ * actually turns on.
+ *
+ * Note this is the only call here that uses v2's "lookback" rather than a
+ * timestep: v2 rejects timestep outright, and v1's timestep form is the older
+ * spelling of the same series.
+ */
+export async function getTimeseries(itemId: number, lookback: Lookback): Promise<TimeseriesPoint[]> {
+	const ttl: Record<Lookback, number> = {
+		"24h": 5 * 60_000,
+		"7d": 30 * 60_000,
+		"30d": HOUR,
+		"1y": 6 * HOUR,
+	};
+	return cachedJson(`timeseries-${itemId}-${lookback}`, ttl[lookback], async () =>
+		(await fetchJson<{ data: TimeseriesPoint[] }>(`${BASE}/timeseries?lookback=${lookback}&id=${itemId}`)).data,
+	);
+}
+
+export interface TrendSummary {
+	points: number;
+	stepMinutes: number | null;
+	from?: string;
+	to?: string;
+	firstPrice: number | null;
+	lastPrice: number | null;
+	minPrice: number | null;
+	maxPrice: number | null;
+	changePercent: number | null;
+	totalVolume: number;
+	averageDailyVolume: number | null;
+}
+
+/**
+ * Reduces a series to the handful of numbers a buying decision turns on. The
+ * step is measured from the timestamps rather than assumed from the lookback,
+ * so a change at the API's end cannot quietly skew volume per day.
+ */
+export function summarizeSeries(points: TimeseriesPoint[]): TrendSummary {
+	const mid = (p: TimeseriesPoint): number | null => {
+		const high = p.avgHighPrice;
+		const low = p.avgLowPrice;
+		if (high !== null && low !== null) return Math.round((high + low) / 2);
+		return high ?? low;
+	};
+	const prices = points.map(mid).filter((p): p is number => p !== null);
+	const totalVolume = points.reduce((n, p) => n + p.highPriceVolume + p.lowPriceVolume, 0);
+
+	const first = points[0];
+	const last = points[points.length - 1];
+	const spanSeconds = first && last ? last.timestamp - first.timestamp : 0;
+	const stepSeconds = points.length > 1 ? spanSeconds / (points.length - 1) : 0;
+
+	const firstPrice = prices[0] ?? null;
+	const lastPrice = prices[prices.length - 1] ?? null;
+	return {
+		points: points.length,
+		stepMinutes: stepSeconds > 0 ? Math.round(stepSeconds / 60) : null,
+		from: first ? new Date(first.timestamp * 1000).toISOString() : undefined,
+		to: last ? new Date(last.timestamp * 1000).toISOString() : undefined,
+		firstPrice,
+		lastPrice,
+		minPrice: prices.length ? Math.min(...prices) : null,
+		maxPrice: prices.length ? Math.max(...prices) : null,
+		changePercent: firstPrice && lastPrice
+			? Math.round(((lastPrice - firstPrice) / firstPrice) * 1000) / 10
+			: null,
+		totalVolume,
+		averageDailyVolume: spanSeconds > 0
+			? Math.round(totalVolume / (spanSeconds / 86400))
+			: null,
+	};
+}

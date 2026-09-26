@@ -1,7 +1,9 @@
 package com.runelitemc.bridge;
 
 import com.google.gson.JsonObject;
+import com.runelitemc.bridge.providers.ActivitiesProvider;
 import com.runelitemc.bridge.providers.BossKcProvider;
+import com.runelitemc.bridge.providers.ChargesProvider;
 import com.runelitemc.bridge.providers.CombatAchievementsProvider;
 import com.runelitemc.bridge.providers.CollectionLogProvider;
 import com.runelitemc.bridge.providers.ItemStateProvider;
@@ -24,10 +26,13 @@ public class SnapshotService
 	private final SlayerProvider slayer;
 	private final BossKcProvider bossKc;
 	private final CollectionLogProvider collectionLog;
+	private final ActivitiesProvider activities;
+	private final ChargesProvider charges;
 
 	public SnapshotService(PlayerStateProvider playerState, ItemStateProvider itemState,
 		ProgressProvider progress, CombatAchievementsProvider combatAchievements,
-		SlayerProvider slayer, BossKcProvider bossKc, CollectionLogProvider collectionLog)
+		SlayerProvider slayer, BossKcProvider bossKc, CollectionLogProvider collectionLog,
+		ActivitiesProvider activities, ChargesProvider charges)
 	{
 		this.playerState = playerState;
 		this.itemState = itemState;
@@ -36,6 +41,8 @@ public class SnapshotService
 		this.slayer = slayer;
 		this.bossKc = bossKc;
 		this.collectionLog = collectionLog;
+		this.activities = activities;
+		this.charges = charges;
 	}
 
 	public JsonObject snapshot()
@@ -52,6 +59,10 @@ public class SnapshotService
 		o.add("equipment", itemState.equipment());
 		o.add("bank", itemState.bank());
 		o.add("collectionLog", collectionLog.summary());
+		o.add("activities", activities.activities());
+		// Zero-charge counters are dropped: a zero varbit cannot tell an
+		// uncharged item from one the player has never owned.
+		o.add("charges", charges.charges(false));
 		return o;
 	}
 }

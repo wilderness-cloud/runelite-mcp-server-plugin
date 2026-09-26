@@ -19,7 +19,9 @@
             "inventory",
             "equipment",
             "bank",
-            "collectionLog"
+            "collectionLog",
+            "activities",
+            "charges"
           ]
         }
       }
@@ -68,6 +70,12 @@
       },
       "collectionLog": {
         "$ref": "#/$defs/collectionLogSummary"
+      },
+      "activities": {
+        "$ref": "#/$defs/activities"
+      },
+      "charges": {
+        "$ref": "#/$defs/charges"
       }
     },
     "$defs": {
@@ -692,6 +700,10 @@
           "placeholder": {
             "type": "boolean",
             "description": "Bank only. True when this entry is a reserved empty slot rather than a held item."
+          },
+          "charges": {
+            "type": "integer",
+            "description": "Uses remaining, taken from the \"(n)\" suffix of the item name: teleports for jewellery like Ring of wealth (4) or Digsite pendant (5), doses for potions like Prayer potion(4). Absent when the name carries no such suffix. Charges held in a varbit instead (Xeric's talisman, tridents, tomes) are in the charges section, not here."
           }
         }
       },
@@ -750,6 +762,169 @@
           "main": {
             "type": "boolean",
             "description": "Present and true on the main tab."
+          }
+        }
+      },
+      "activities": {
+        "type": "object",
+        "description": "Progress that is neither a skill, a quest, a diary nor a killcount: Great Kourend favour, minigame reward-point balances, and the Farming Guild contract. Miniquest completion is not here — every miniquest is in the quests section.",
+        "required": [
+          "capturedAt"
+        ],
+        "properties": {
+          "capturedAt": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "kourendFavour": {
+            "type": "object",
+            "description": "Favour with the five Great Kourend houses. Gates the Woodcutting Guild (75% Hosidius), blast mining (100% Lovakengj), the Arceuus spellbook and Shayzien armour, among others.",
+            "properties": {
+              "houses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "house",
+                    "percent",
+                    "rawTenths",
+                    "full"
+                  ],
+                  "properties": {
+                    "house": {
+                      "type": "string",
+                      "description": "Arceuus, Hosidius, Lovakengj, Piscarilius or Shayzien."
+                    },
+                    "percent": {
+                      "type": "number",
+                      "description": "Favour as a percentage, 0 to 100. One decimal place; the game stores tenths."
+                    },
+                    "rawTenths": {
+                      "type": "integer",
+                      "description": "The varbit as stored: tenths of a percent, so 1000 is 100%."
+                    },
+                    "full": {
+                      "type": "boolean",
+                      "description": "Favour is at 100%."
+                    }
+                  }
+                }
+              },
+              "housesAtFullFavour": {
+                "type": "integer"
+              }
+            }
+          },
+          "rewardPoints": {
+            "type": "array",
+            "description": "Minigame currency balances. Slayer points are deliberately absent — they are in the slayer section, and one number in two places is one number that can disagree with itself.",
+            "items": {
+              "type": "object",
+              "required": [
+                "activity",
+                "points"
+              ],
+              "properties": {
+                "activity": {
+                  "type": "string",
+                  "description": "Which activity the balance belongs to, e.g. 'Nightmare Zone'."
+                },
+                "points": {
+                  "type": "integer"
+                },
+                "spentOn": {
+                  "type": "string",
+                  "description": "What the points buy, so a plan can judge whether the balance matters."
+                }
+              }
+            }
+          },
+          "farmingContract": {
+            "type": "object",
+            "description": "The Farming Guild contract from Guildmaster Jane. Crop names come from the same table farming_state uses, so the two answers agree.",
+            "required": [
+              "active"
+            ],
+            "properties": {
+              "active": {
+                "type": "boolean",
+                "description": "False means no contract is running."
+              },
+              "produce": {
+                "type": "string",
+                "description": "The crop asked for, e.g. 'Ranarr'. Present only while active."
+              },
+              "difficultyLevel": {
+                "type": "integer",
+                "description": "Contract difficulty as the game stores it, ascending. Present only while active."
+              },
+              "contractsCompleted": {
+                "type": "integer",
+                "description": "Lifetime completed contracts."
+              },
+              "contractVarbitValue": {
+                "type": "integer",
+                "description": "Present only when the crop is not in the generated produce table."
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "charges": {
+        "type": "object",
+        "description": "Charges left on charged gear. Items whose count is part of their name (Ring of wealth (4), Digsite pendant (5), Skills necklace (6), potions) are NOT here: their count rides on the item itself as a \"charges\" field in the inventory, equipment and bank sections. Counters reading zero are omitted, because a zero varbit does not distinguish an uncharged item from one the player has never owned.",
+        "required": [
+          "capturedAt"
+        ],
+        "properties": {
+          "capturedAt": {
+            "$ref": "#/$defs/timestamp"
+          },
+          "chargedItems": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "item",
+                "charges",
+                "source"
+              ],
+              "properties": {
+                "item": {
+                  "type": "string",
+                  "description": "The charged item, e.g. \"Xeric's talisman\"."
+                },
+                "charges": {
+                  "type": "integer",
+                  "description": "Uses remaining."
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "What one charge buys: teleports, casts, scales, pages, prayer charges."
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "game",
+                    "runelite"
+                  ],
+                  "description": "'game' is an exact counter read from the client. 'runelite' is RuneLite's Item Charges plugin counting game messages — an estimate that needs that plugin enabled and drifts if the item was used while it was off."
+                },
+                "chargeNote": {
+                  "type": "string",
+                  "description": "Present on 'runelite' entries, spelling out that caveat."
+                }
+              }
+            }
+          },
+          "includesEmpty": {
+            "type": "boolean",
+            "description": "Whether zero-charge counters were included."
+          },
+          "note": {
+            "type": "string"
           }
         }
       }

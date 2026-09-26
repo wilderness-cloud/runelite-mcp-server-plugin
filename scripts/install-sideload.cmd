@@ -2,16 +2,28 @@
 rem Copies the built plugin jar into RuneLite's sideloaded-plugins folder.
 rem Build first:  cd plugin ^&^& gradlew jar
 setlocal
-set SRC=%~dp0..\plugin\build\libs\gielinor-companion-0.1.0.jar
+set LIBS=%~dp0..\plugin\build\libs
 set DEST=%USERPROFILE%\.runelite\sideloaded-plugins
-if not exist "%SRC%" (
-	echo Plugin jar not found at %SRC% - build it first: cd plugin ^&^& gradlew jar
+
+rem Pick the jar by pattern rather than by version: the release workflow bumps
+rem the version from the merged PR's semver label, so the filename moves.
+set SRC=
+for %%J in ("%LIBS%\runelite-mcp-server-plugin-*.jar") do set SRC=%%~fJ
+if "%SRC%"=="" (
+	echo No plugin jar in %LIBS% - build it first: cd plugin ^&^& gradlew jar
 	exit /b 1
 )
+
 if not exist "%DEST%" mkdir "%DEST%"
-rem Clear the pre-rename jar; leaving it there loads the plugin twice and the
-rem second copy cannot bind the port.
-if exist "%DEST%unelite-mcp-bridge-0.1.0.jar" del /q "%DEST%unelite-mcp-bridge-0.1.0.jar"
+
+rem Clear every older copy first. Two jars of this plugin in the folder load it
+rem twice, and the second copy cannot bind the port. That includes jars left by
+rem an earlier version number and by the names this plugin used before the
+rem rename to runelite-mcp-server-plugin.
+del /q "%DEST%\runelite-mcp-server-plugin-*.jar" 2>nul
+del /q "%DEST%\gielinor-companion-*.jar" 2>nul
+del /q "%DEST%\runelite-mcp-bridge-*.jar" 2>nul
+
 copy /y "%SRC%" "%DEST%" >nul
 echo Installed %SRC%
 echo   to %DEST%

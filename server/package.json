@@ -1,13 +1,26 @@
 {
-  "name": "osrs-companion-mcp",
+  "name": "runelite-mcp-companion-server",
   "version": "0.1.0",
-  "description": "MCP server combining live RuneLite game state with OSRS wiki, GE price, and WOM data",
+  "description": "Optional MCP server that proxies the RuneLite MCP Server plugin and adds OSRS wiki, Grand Exchange price, and Wise Old Man data",
+  "license": "BSD-2-Clause",
+  "author": "wilderness-cloud",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wilderness-cloud/runelite-mcp-server-plugin.git",
+    "directory": "server"
+  },
+  "homepage": "https://github.com/wilderness-cloud/runelite-mcp-server-plugin#readme",
+  "bugs": "https://github.com/wilderness-cloud/runelite-mcp-server-plugin/issues",
   "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
   "bin": {
-    "osrs-companion-mcp": "dist/index.js"
+    "runelite-mcp-companion-server": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "test": "node --import tsx --test test/*.test.ts",
     "start:http": "node dist/index.js --http"
@@ -18,6 +31,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0"
   }

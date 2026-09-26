@@ -1,52 +1,121 @@
 name: release
 
-# Tag a release to publish the sideload jar:  git tag v0.1.0 && git push --tags
+# Merging a labelled PR into main cuts the release. The label decides the bump:
+#   major -> 1.4.2 -> 2.0.0     minor -> 1.4.2 -> 1.5.0     patch -> 1.4.2 -> 1.4.3
+#
+# semantic-release then writes that version into plugin/build.gradle and
+# server/package.json, builds the jar from it, commits the bump back to main,
+# tags v<version>, and publishes the GitHub release with the jar attached.
+#
+# The PR event (rather than push-to-main) is what makes the label readable: it
+# arrives on the payload, with no need to hunt for the PR that owns a commit.
 on:
-  push:
-    tags: ["v*"]
+  pull_request:
+    types: [closed]
+    branches: [main]
+  # Recover a release whose run failed after merge, or cut one for a PR that was
+  # merged unlabelled, without opening a throwaway PR.
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: Bump to apply
+        required: true
+        type: choice
+        options: [patch, minor, major]
 
-permissions:
-  contents: write
+# Never let two releases race: they would compute the same next version from the
+# same base and then fight over the tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
+    # Closing a PR without merging must not release anything.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+
+    permissions:
+      # Push the version bump commit and the tag, and create the release.
+      contents: write
+      # Comment on the PR and issues the release closes.
+      issues: write
+      pull-requests: write
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The PR is already merged, so release from main itself rather than the
+          # merge ref. Full history: semantic-release reads tags to find the last
+          # release, and a shallow clone has none of them.
+          ref: main
+          fetch-depth: 0
+          # Persist the token so @semantic-release/git can push the bump commit.
+          persist-credentials: true
 
+      # Java 11 for the same reason as CI: this is the jar users install.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "11"
+          cache: gradle
 
-      - name: Test
-        working-directory: plugin
-        run: ./gradlew --no-daemon test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
 
-      - name: Build jar
-        working-directory: plugin
-        run: ./gradlew --no-daemon jar
+      - name: Install release tooling
+        run: npm ci
 
-      - name: Check the tag matches the built jar
-        working-directory: plugin
+      # @semantic-release/npm bumps server/package.json; it runs npm in server/,
+      # so that install has to exist too.
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Resolve the release type
+        id: type
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_TYPE: ${{ inputs.release-type }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          jar="build/libs/gielinor-companion-${version}.jar"
-          if [ ! -f "$jar" ]; then
-            echo "tag ${GITHUB_REF_NAME} expects ${jar}, which the build did not produce."
-            echo "Bump 'version' in plugin/build.gradle to ${version} (built: $(ls build/libs))"
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "release-type=$DISPATCH_TYPE" >> "$GITHUB_OUTPUT"
+            echo "Manual release: $DISPATCH_TYPE"
+            exit 0
+          fi
+
+          matched=$(jq -r '.[] | select(. == "major" or . == "minor" or . == "patch")' <<< "$LABELS")
+          count=$(grep -c . <<< "$matched" || true)
+
+          if [ "$count" -gt 1 ]; then
+            echo "::error::Merged PR carries more than one version label ($(tr '\n' ' ' <<< "$matched"))."
             exit 1
           fi
-          sha256sum "$jar" | tee "${jar}.sha256"
 
-      - name: Publish
-        working-directory: plugin
+          # Zero labels is not a failure: the PR is already merged, so failing
+          # here would only paint main red over something no longer fixable.
+          # semantic-release treats an empty type as "no release" and exits clean.
+          if [ "$count" -eq 0 ]; then
+            echo "::warning::Merged PR had no version label, so no release was cut." \
+              "Re-run this workflow manually if it should have produced one."
+          fi
+          echo "release-type=$matched" >> "$GITHUB_OUTPUT"
+          echo "Release type from label: ${matched:-(none)}"
+
+      - name: Run semantic-release
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          gh release create "${GITHUB_REF_NAME}" \
-            "build/libs/gielinor-companion-${version}.jar" \
-            "build/libs/gielinor-companion-${version}.jar.sha256" \
-            --title "Gielinor Companion ${GITHUB_REF_NAME}" \
-            --notes "Sideload install: drop the jar in \`%USERPROFILE%\\.runelite\\sideloaded-plugins\` and start the client in developer mode (see the README). Verify with the .sha256 file."
+          # Read by release/label-release-type.mjs as the release type.
+          RELEASE_TYPE: ${{ steps.type.outputs.release-type }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The bump commit is authored by the bot rather than the merger.
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: npx semantic-release

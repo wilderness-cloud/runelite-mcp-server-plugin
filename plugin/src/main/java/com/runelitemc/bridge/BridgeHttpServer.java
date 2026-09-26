@@ -121,7 +121,7 @@ public class BridgeHttpServer
 			if (path.equals("/"))
 			{
 				JsonObject index = new JsonObject();
-				index.addProperty("service", "gielinor-companion");
+				index.addProperty("service", "runelite-mcp-server");
 				index.addProperty("mcp", MCP_PATH);
 				index.add("endpoints", gson.toJsonTree(routes.keySet()));
 				respond(exchange, 200, index);
