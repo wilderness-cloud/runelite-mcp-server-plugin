@@ -57,6 +57,62 @@ for (const entry of config.plugins ?? []) {
 	}
 }
 
+// A `preset` names a package that release-notes-generator does NOT bundle — it
+// ships only conventional-changelog-angular — and it is loaded lazily, during
+// generateNotes. So a missing preset is invisible until a release is already
+// half done: the version is computed, then it dies with MODULE_NOT_FOUND. Run
+// the step for real, against synthetic commits so this stays independent of
+// whatever history the branch happens to have.
+for (const entry of config.plugins ?? []) {
+	if (!Array.isArray(entry) || entry[0] !== "@semantic-release/release-notes-generator") {
+		continue;
+	}
+	const pluginConfig = entry[1] ?? {};
+	if (pluginConfig.preset) {
+		const presetPackage = `conventional-changelog-${String(pluginConfig.preset).toLowerCase()}`;
+		try {
+			// import.meta.resolve, not require.resolve: these presets are ESM-only,
+			// so a require resolution fails on a package that is perfectly present.
+			import.meta.resolve(presetPackage);
+			ok(`notes preset is installed: ${presetPackage}`);
+		} catch {
+			fail(`notes preset "${pluginConfig.preset}" needs ${presetPackage}, which is not installed.`
+				+ ` release-notes-generator bundles only conventional-changelog-angular, so add it`
+				+ ` to devDependencies or the release dies at generateNotes.`);
+		}
+	}
+
+	try {
+		const { generateNotes } = await import("@semantic-release/release-notes-generator");
+		const notes = await generateNotes(pluginConfig, {
+			cwd: REPO,
+			options: { repositoryUrl: "https://github.com/wilderness-cloud/runelite-mcp-server-plugin" },
+			lastRelease: { version: "0.0.0", gitTag: "v0.0.0" },
+			nextRelease: { version: "0.0.1", gitTag: "v0.0.1", type: "patch" },
+			commits: [
+				{ hash: "0".repeat(40), message: "fix: a fix\n", subject: "a fix", body: "", committerDate: new Date() },
+				{ hash: "1".repeat(40), message: "ci: a pipeline change\n", subject: "a pipeline change", body: "", committerDate: new Date() },
+			],
+			logger: { log() {}, error() {}, warn() {} },
+		});
+		if (typeof notes !== "string") {
+			fail("generateNotes did not return notes");
+		} else {
+			ok("generateNotes renders with the configured preset");
+			// The types mapping exists so that ci/chore/docs commits appear at all;
+			// the angular default drops them, which is a silently empty changelog.
+			if (pluginConfig.presetConfig?.types && !/pipeline change/.test(notes)) {
+				fail("the configured presetConfig.types is not taking effect:"
+					+ " a ci: commit did not appear in the rendered notes");
+			} else if (pluginConfig.presetConfig?.types) {
+				ok("presetConfig.types keeps non-feat/fix commits in the notes");
+			}
+		}
+	} catch (error) {
+		fail(`generateNotes failed: ${error.message}`);
+	}
+}
+
 // The shim is what turns a PR label into a release type; without analyzeCommits
 // semantic-release would silently fall through to commit-message analysis.
 try {

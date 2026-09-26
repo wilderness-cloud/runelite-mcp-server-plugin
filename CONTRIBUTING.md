@@ -61,11 +61,26 @@ npm ci && npm run verify:release        # repo root: release config and the labe
 node scripts/validate-schemas.mjs       # live payloads vs. served schemas; needs the client running
 ```
 
-`npm run release:dry` dry-runs semantic-release itself. Note it still calls
-`verifyAuth` — a real `git push --dry-run` — so it needs push rights to the
-remote and a `GITHUB_TOKEN` in the environment. That is also why CI checks the
-config with `verify:release` rather than a dry run: a job running on pull
-requests must not hold a write-capable token.
+`npm run release:dry` dry-runs semantic-release itself, but do not mistake it for
+coverage of a release. A dry run **skips `prepare` and `publish` entirely**, so it
+never builds the jar, never bumps `server/package.json`, and never renders the
+release notes — a release can therefore fail at `prepare` after the version has
+already been computed. It also still calls `verifyAuth`, a real
+`git push --dry-run`, so it needs push rights and a `GITHUB_TOKEN`.
+
+CI covers those gaps without a write-capable token, which a job running on pull
+requests must never hold:
+
+- `verify:release` resolves every plugin, checks the notes preset is actually
+  installed, and **renders the notes for real** — the `conventionalcommits`
+  preset is a separate package that `release-notes-generator` does not bundle and
+  loads lazily, so a missing one is invisible until mid-release.
+- the plugin job builds through `release/build-jar.sh` itself, exercising the
+  version rewrite, the exact-filename assertion and the checksum.
+
+What still cannot be covered before a release: `@semantic-release/git` pushing the
+bump commit and `@semantic-release/github` creating the release, both of which need
+real write credentials.
 
 ## House style
 

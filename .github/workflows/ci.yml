@@ -55,9 +55,14 @@ jobs:
         working-directory: plugin
         run: ./gradlew --no-daemon test
 
-      - name: Build jar
-        working-directory: plugin
-        run: ./gradlew --no-daemon jar
+      # Build through the very script the release runs, at the version already
+      # declared, so the release path is exercised on every PR: the version
+      # rewrite, the exact-filename assertion, the checksum. `semantic-release
+      # --dry-run` cannot cover any of it — dry runs skip prepare and publish
+      # outright — and a release that only breaks at prepare breaks after the
+      # version has already been computed.
+      - name: Build jar through the release path
+        run: release/build-jar.sh "$(sed -n "s/^version = '\(.*\)'\$/\1/p" plugin/build.gradle)"
 
       # Named for the PR so a reviewer can sideload the exact build under review.
       - uses: actions/upload-artifact@v5
