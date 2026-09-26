@@ -43,7 +43,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # The PR is already merged, so release from main itself rather than the
           # merge ref. Full history: semantic-release reads tags to find the last
@@ -54,13 +54,13 @@ jobs:
           persist-credentials: true
 
       # Java 11 for the same reason as CI: this is the jar users install.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "11"
           cache: gradle
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm

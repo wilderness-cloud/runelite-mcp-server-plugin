@@ -57,12 +57,15 @@ release by hand: **Actions → release → Run workflow**, and pick the bump.
 ```
 cd plugin  && ./gradlew test            # 50 tests: JSON-RPC, transport, schemas, diaries, farming, version
 cd server  && npm ci && npm run typecheck && npm test
+npm ci && npm run verify:release        # repo root: release config and the label shim
 node scripts/validate-schemas.mjs       # live payloads vs. served schemas; needs the client running
 ```
 
-`npm run release:dry` at the repo root dry-runs semantic-release. It needs to be
-on `main` with the remote reachable, since semantic-release resolves release
-branches against the remote.
+`npm run release:dry` dry-runs semantic-release itself. Note it still calls
+`verifyAuth` — a real `git push --dry-run` — so it needs push rights to the
+remote and a `GITHUB_TOKEN` in the environment. That is also why CI checks the
+config with `verify:release` rather than a dry run: a job running on pull
+requests must not hold a write-capable token.
 
 ## House style
 

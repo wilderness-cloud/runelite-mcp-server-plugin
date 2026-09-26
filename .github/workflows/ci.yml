@@ -14,15 +14,38 @@ permissions:
   contents: read
 
 jobs:
+  # A Windows checkout has no exec bit to lose, so a mode dropped from the index
+  # is invisible locally and only shows up here as a bare "exit code 126".
+  # Both of these are invoked as ./path by CI and by semantic-release.
+  exec-bits:
+    name: exec bits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Scripts invoked directly must be executable
+        run: |
+          status=0
+          for f in plugin/gradlew release/build-jar.sh; do
+            if [ -x "$f" ]; then
+              echo "ok   $f"
+            else
+              echo "::error file=$f::$f is not executable, so running it gives exit code 126." \
+                "Fix with: git update-index --chmod=+x $f"
+              status=1
+            fi
+          done
+          exit $status
+
   plugin:
     name: plugin (Java 11)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Java 11: the client runs on it, and build.gradle pins release 11. Building
       # on a newer JDK would let through API that the client's JVM cannot load.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "11"
@@ -37,7 +60,7 @@ jobs:
         run: ./gradlew --no-daemon jar
 
       # Named for the PR so a reviewer can sideload the exact build under review.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: runelite-mcp-server-plugin-${{ github.sha }}
           path: plugin/build/libs/*.jar
@@ -48,9 +71,9 @@ jobs:
     name: companion server (Node)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -96,17 +119,21 @@ jobs:
           fi
           exit 1
 
-  # The release workflow runs semantic-release from this config; a typo in it
-  # would only surface at merge, after review has closed. Parse it here instead.
+  # The release workflow runs semantic-release from this config, so a typo in it
+  # would otherwise only surface at merge, with review closed and the PR gone.
+  #
+  # Deliberately not `semantic-release --dry-run`: that calls verifyAuth
+  # unconditionally — a real `git push --dry-run` — even in dry-run mode, so it
+  # needs a write-capable token. A job that runs on pull requests, forks
+  # included, must not have one. verify-config.mjs checks what actually breaks
+  # instead: the config parsing, every plugin resolving, and the label shim.
   release-config:
     name: release config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -115,14 +142,5 @@ jobs:
       - name: Install release tooling
         run: npm ci
 
-      # Loads .releaserc.json and resolves every plugin, including the local
-      # label-release-type shim, so a typo in the release config fails here
-      # rather than at merge. Config is validated before semantic-release decides
-      # whether to release, and it never does here: on a PR it recognises the PR
-      # and stops, and on main RELEASE_TYPE is unset so the type is "no release".
-      # Deliberately not --no-ci, which would bypass that PR detection and then
-      # fail on the branch check instead.
-      - name: Dry-run semantic-release
-        run: npx semantic-release --dry-run
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify the release config
+        run: npm run verify:release
