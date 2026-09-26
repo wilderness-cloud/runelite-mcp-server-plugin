@@ -1,6 +1,6 @@
 {
   "name": "runelite-mcp-companion-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Optional MCP server that proxies the RuneLite MCP Server plugin and adds OSRS wiki, Grand Exchange price, and Wise Old Man data",
   "license": "BSD-2-Clause",
   "author": "wilderness-cloud",

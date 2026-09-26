@@ -30,7 +30,7 @@ dependencies {
 }
 
 group = 'com.runelitemc'
-version = '0.1.0'
+version = '0.2.0'
 
 /**
  * Stamps the jar with the commit it was built from. A sideloaded plugin is
